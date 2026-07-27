@@ -30,12 +30,20 @@ namespace Qudmi
         [Range(0f, 0.95f)]
         [SerializeField] private float smoothing = 0.3f;
 
+        [Header("Sampling")]
+        [Tooltip("Training data was resampled to this rate (see docs/SPEC.md). Pushing a new " +
+            "frame every render frame instead -- e.g. 90Hz on Quest -- would make the model's " +
+            "40-frame window cover a much shorter real-time span than it was trained on, " +
+            "skewing velocity and temporal context even though nothing would crash.")]
+        [SerializeField] private float targetSampleFps = 30f;
+
         private Animator _animator;
         private TrackerWindowBuffer _buffer;
         private IInferenceEngine _engine;
         private Quaternion[] _smoothedRotations;
         private Vector3 _smoothedRootPosition;
         private bool _hasPreviousPose;
+        private float _timeSinceLastSample;
 
         private void Awake()
         {
@@ -65,6 +73,16 @@ namespace Qudmi
             {
                 return;
             }
+
+            _timeSinceLastSample += Time.deltaTime;
+            float samplePeriod = 1f / targetSampleFps;
+            if (_timeSinceLastSample < samplePeriod)
+            {
+                return; // not yet time for the next ~30fps sample
+            }
+            _timeSinceLastSample %= samplePeriod; // carry over remainder rather than resetting to 0,
+                                                   // so the average sampled rate stays accurate even
+                                                   // when render rate isn't a clean multiple of it
 
             _buffer.PushFrame(
                 headTransform.position, headTransform.rotation,
