@@ -9,7 +9,9 @@ for project status, not the commit history.
 - [x] Data preprocessing pipeline: AMASS → (sparse signal, full-body pose) pairs
       (`src/qudmi/data/{rotations,smplh,amass}.py`, `scripts/preprocess_amass.py`; validated
       end-to-end on the ACCAD subset: 252 sequences → 6002/1060/2632 train/val/test windows)
-- [ ] First model architecture implemented (transformer or TCN, ~5–20M params)
+- [x] First model architecture implemented (transformer, ~5–20M params)
+      (`src/qudmi/models/transformer.py`: 4.8M params, 1.46ms GPU / 2.25ms CPU inference
+      latency for a single frame — both well under the 20ms real-time budget)
 - [ ] First training run completes, loss curves logged
 - [ ] Evaluation: MPJPE / jitter / foot-skate on held-out AMASS subjects
 - [ ] ONNX export of trained model
