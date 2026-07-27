@@ -1,0 +1,19 @@
+{
+    "name": "com.qudmi.fullbody",
+    "version": "0.1.0",
+    "displayName": "Qudmi Full Body",
+    "description": "Drop-in full-body avatar motion from a VR headset + two hand controllers, driven by an open, free, on-device model. No ML code required -- add one component to a Humanoid-rigged avatar.",
+    "unity": "6000.0",
+    "license": "MIT",
+    "dependencies": {
+        "com.unity.ai.inference": "2.2.1"
+    },
+    "keywords": [
+        "vr",
+        "xr",
+        "avatar",
+        "full-body",
+        "ik",
+        "machine-learning"
+    ]
+}

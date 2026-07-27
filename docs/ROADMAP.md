@@ -37,7 +37,18 @@ for project status, not the commit history.
 - [x] ONNX export of trained model (`src/qudmi/export/onnx_export.py`)
       Verified numerically identical to PyTorch (max diff ~2e-6). ONNX Runtime CPU inference:
       1.72ms/frame, comfortably under the 20ms real-time budget.
-- [ ] Unity + OpenXR plugin skeleton runs the ONNX model live on tracked head+hands
+- [x] Unity + OpenXR plugin skeleton (`unity_plugin/`, package `com.qudmi.fullbody`)
+      Single drop-in `QudmiFullBodyDriver` component on a Humanoid-rigged Animator; no ML code
+      required. Uses Unity's Inference Engine (formerly "Sentis", renamed to
+      `com.unity.ai.inference`/`Unity.InferenceEngine` -- caught via an actual batchmode
+      compile, not assumed). Verified: compiles cleanly against Unity 6000.4 + Inference Engine
+      2.2 (real batchmode build, not just authored blind); all 3 EditMode parity tests pass,
+      numerically confirming the trickiest part -- converting between the training pipeline's
+      right-handed Y-up convention and Unity's left-handed Y-up, for both the sparse-input
+      encoding and the predicted-pose decoding (including root-joint yaw recomposition) -- see
+      `unity_plugin/README.md` and `scripts/generate_unity_parity_fixture.py`.
+      Not yet done: live Play-mode test with a real headset + rigged avatar (needs a physical
+      XR device and a rigged character, separate from math/compile correctness) -- next item.
 - [ ] End-to-end demo: real Quest headset driving a full-body avatar in a Unity scene
 - [ ] Public model weights + writeup published (Hugging Face + README)
 
