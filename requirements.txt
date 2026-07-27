@@ -1,0 +1,8 @@
+torch>=2.13
+numpy
+scipy
+tqdm
+tensorboard
+onnx
+onnxruntime
+pytest

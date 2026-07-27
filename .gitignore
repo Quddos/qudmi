@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data & model artifacts (large, not meant for git)
+data/
+checkpoints/
+*.onnx
+*.pt
+*.pth
+
+# Unity
+unity_plugin/**/Library/
+unity_plugin/**/Temp/
+unity_plugin/**/obj/
+unity_plugin/**/*.csproj
+unity_plugin/**/*.sln
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

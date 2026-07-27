@@ -1,0 +1,14 @@
+[project]
+name = "qudmi"
+version = "0.1.0"
+description = "Imitation-learning model for full-body VR/XR/AR avatar motion from sparse tracker signals"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
