@@ -12,7 +12,9 @@ motion-capture data instead of hand-coding it, and ships it as a small (~5–20M
 any engine can run locally at real-time latency.
 
 > Status: early scaffold — architecture and training pipeline in progress. See
-> [docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's next.
+> [docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's next, and
+> [docs/VISION.md](docs/VISION.md) for the longer-term mission and why this aims to be more
+> than a single VR plugin.
 
 ## Why this exists
 

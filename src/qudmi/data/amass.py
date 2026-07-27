@@ -34,9 +34,14 @@ from qudmi.data.smplh import (
     forward_kinematics,
 )
 
-TRACKER_JOINTS = [HEAD_JOINT, LEFT_WRIST_JOINT, RIGHT_WRIST_JOINT]
+# Default sparse-tracker config: VR headset + two hand controllers. This is *a* config, not
+# *the* config -- process_sequence() takes tracker_joints as a parameter so the same pipeline
+# can target other sparse-input setups later (e.g. adding pelvis/feet for robotics teleop or
+# budget mocap) without restructuring the code, just different joint indices and a retrain.
+# See docs/VISION.md.
+DEFAULT_TRACKER_JOINTS = [HEAD_JOINT, LEFT_WRIST_JOINT, RIGHT_WRIST_JOINT]
 FEATURES_PER_TRACKER = 3 + 6 + 3  # position + 6D rotation + velocity
-INPUT_DIM = len(TRACKER_JOINTS) * FEATURES_PER_TRACKER  # 36
+INPUT_DIM = len(DEFAULT_TRACKER_JOINTS) * FEATURES_PER_TRACKER  # 36, for the default VR config
 OUTPUT_DIM = NUM_BODY_JOINTS * 6 + 3  # 22 joint rotations (6D) + root translation = 135
 NUM_BETAS = 16
 GENDER_CODES = {"male": 0, "female": 1, "neutral": 2}  # persisted per-window so evaluation can
@@ -97,7 +102,9 @@ def process_sequence(
     stride: int = 4,
     target_fps: float = 30.0,
     device: str = "cpu",
+    tracker_joints: list[int] | None = None,
 ) -> SequenceSample | None:
+    tracker_joints = tracker_joints if tracker_joints is not None else DEFAULT_TRACKER_JOINTS
     data = np.load(npz_path, allow_pickle=True)
     if "poses" not in data or "trans" not in data:
         return None
@@ -140,11 +147,14 @@ def process_sequence(
     offsets = torch.arange(window - 1, -1, -1)
     frame_idx = anchors_t[:, None] - offsets[None, :]
 
-    tracker_positions = positions[:, TRACKER_JOINTS, :]  # (T, 3, 3)
-    tracker_rotmats = rotmats[:, TRACKER_JOINTS, :, :]  # (T, 3, 3, 3)
+    num_trackers = len(tracker_joints)
+    input_dim = num_trackers * FEATURES_PER_TRACKER
 
-    pos_win = tracker_positions[frame_idx]  # (M, window, 3, 3)
-    rot_win = tracker_rotmats[frame_idx]  # (M, window, 3, 3, 3)
+    tracker_positions = positions[:, tracker_joints, :]  # (T, num_trackers, 3)
+    tracker_rotmats = rotmats[:, tracker_joints, :, :]  # (T, num_trackers, 3, 3)
+
+    pos_win = tracker_positions[frame_idx]  # (M, window, num_trackers, 3)
+    rot_win = tracker_rotmats[frame_idx]  # (M, window, num_trackers, 3, 3)
 
     anchor_head_pos = positions[anchors_t, HEAD_JOINT, :].clone()  # (M, 3)
     anchor_head_pos_horiz = anchor_head_pos.clone()
@@ -161,8 +171,8 @@ def process_sequence(
     vel[:, 1:] = canon_pos[:, 1:] - canon_pos[:, :-1]
     vel[:, 0] = vel[:, 1]  # no earlier frame to diff against; backward-fill
 
-    per_tracker = torch.cat([canon_pos, rot6d, vel], dim=-1)  # (M, window, 3, 12)
-    X = per_tracker.reshape(len(anchors), window, INPUT_DIM)
+    per_tracker = torch.cat([canon_pos, rot6d, vel], dim=-1)  # (M, window, num_trackers, 12)
+    X = per_tracker.reshape(len(anchors), window, input_dim)
 
     root_rotmat_anchor = rotmats[anchors_t, 0, :, :]
     canon_root_rot = torch.einsum("mij,mjk->mik", inv_yaw, root_rotmat_anchor)

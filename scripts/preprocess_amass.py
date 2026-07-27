@@ -30,7 +30,14 @@ def main():
     parser.add_argument("--target-fps", type=float, default=30.0)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--limit", type=int, default=None, help="only process first N files (debugging)")
+    parser.add_argument(
+        "--tracker-joints", default=None,
+        help="comma-separated SMPL+H body-joint indices to use as sparse input trackers "
+             "(default: head+both wrists, i.e. a VR headset config -- see docs/SPEC.md for "
+             "joint index layout). E.g. '15,20,21' or '0,15,20,21' to add the pelvis.",
+    )
     args = parser.parse_args()
+    tracker_joints = [int(j) for j in args.tracker_joints.split(",")] if args.tracker_joints else None
 
     body_model_dir = Path(args.body_model_dir)
     models = {}
@@ -61,7 +68,7 @@ def main():
         try:
             sample = process_sequence(
                 path, models, window=args.window, stride=args.stride,
-                target_fps=args.target_fps, device=args.device,
+                target_fps=args.target_fps, device=args.device, tracker_joints=tracker_joints,
             )
         except Exception as e:
             print(f"  [FAIL] {path}: {e}")
