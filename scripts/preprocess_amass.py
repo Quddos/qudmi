@@ -73,7 +73,7 @@ def main():
             continue
 
         split = split_map[sample.subject_id]
-        buckets[split].append((sample.X.cpu(), sample.Y.cpu()))
+        buckets[split].append((sample.X.cpu(), sample.Y.cpu(), sample.betas.cpu(), sample.gender_code.cpu()))
         n_ok += 1
 
         if (i + 1) % 200 == 0:
@@ -88,9 +88,11 @@ def main():
         if not items:
             print(f"  {split}: 0 windows (no sequences in this split)")
             continue
-        X = torch.cat([x for x, _ in items], dim=0)
-        Y = torch.cat([y for _, y in items], dim=0)
-        torch.save({"X": X, "Y": Y}, out_dir / f"{split}.pt")
+        X = torch.cat([x for x, _, _, _ in items], dim=0)
+        Y = torch.cat([y for _, y, _, _ in items], dim=0)
+        betas = torch.cat([b for _, _, b, _ in items], dim=0)
+        gender_code = torch.cat([g for _, _, _, g in items], dim=0)
+        torch.save({"X": X, "Y": Y, "betas": betas, "gender_code": gender_code}, out_dir / f"{split}.pt")
         print(f"  {split}: {X.shape[0]} windows -> {out_dir / f'{split}.pt'} "
               f"(X {tuple(X.shape)}, Y {tuple(Y.shape)})")
 

@@ -67,10 +67,19 @@ def load_smplh_model(pkl_path: str, device: str = "cpu") -> SMPLHModel:
 
 
 def rest_joint_locations(model: SMPLHModel, betas: torch.Tensor) -> torch.Tensor:
-    """betas: (num_betas,) -> rest-pose joint locations (NUM_BODY_JOINTS, 3) for this body shape."""
+    """betas: (num_betas,) or (N, num_betas) -> rest-pose joint locations for this body shape.
+
+    Accepts either a single shape shared across a whole sequence (returns (NUM_BODY_JOINTS, 3))
+    or a batch of per-sample shapes (returns (N, NUM_BODY_JOINTS, 3)) -- the latter is what
+    evaluation needs, where each window in a batch may come from a different subject/body shape.
+    """
     num_betas = betas.shape[-1]
-    v_shaped = model.v_template + torch.einsum("vij,j->vi", model.shapedirs[:, :, :num_betas], betas)
-    return model.J_regressor @ v_shaped
+    shapedirs = model.shapedirs[:, :, :num_betas]
+    if betas.dim() == 1:
+        v_shaped = model.v_template + torch.einsum("vij,j->vi", shapedirs, betas)
+        return model.J_regressor @ v_shaped
+    v_shaped = model.v_template + torch.einsum("vij,nj->nvi", shapedirs, betas)  # (N, V, 3)
+    return torch.einsum("kv,nvi->nki", model.J_regressor, v_shaped)  # (N, NUM_BODY_JOINTS, 3)
 
 
 def forward_kinematics(
@@ -80,30 +89,46 @@ def forward_kinematics(
     root_trans: torch.Tensor,
 ):
     """
-    betas: (num_betas,)
-    body_pose_axis_angle: (T, NUM_BODY_JOINTS, 3) local joint rotations per frame
-    root_trans: (T, 3) global root translation per frame
+    betas: (num_betas,) shared across all frames, or (N, num_betas) one per frame/sample
+    body_pose_axis_angle: (N, NUM_BODY_JOINTS, 3) local joint rotations
+    root_trans: (N, 3) global root translation
 
     Returns:
-      global_positions: (T, NUM_BODY_JOINTS, 3)
-      global_rotmats:   (T, NUM_BODY_JOINTS, 3, 3)
+      global_positions: (N, NUM_BODY_JOINTS, 3)
+      global_rotmats:   (N, NUM_BODY_JOINTS, 3, 3)
     """
-    T = body_pose_axis_angle.shape[0]
-    J_rest = rest_joint_locations(model, betas)  # (NUM_BODY_JOINTS, 3)
-    local_rotmats = axis_angle_to_matrix(body_pose_axis_angle)  # (T, J, 3, 3)
+    return forward_kinematics_from_rotmats(
+        model, betas, axis_angle_to_matrix(body_pose_axis_angle), root_trans
+    )
 
-    global_positions = torch.zeros(T, NUM_BODY_JOINTS, 3, device=local_rotmats.device)
-    global_rotmats = torch.zeros(T, NUM_BODY_JOINTS, 3, 3, device=local_rotmats.device)
 
-    global_positions[:, 0] = J_rest[0]
+def forward_kinematics_from_rotmats(
+    model: SMPLHModel,
+    betas: torch.Tensor,
+    local_rotmats: torch.Tensor,
+    root_trans: torch.Tensor,
+):
+    """Same as forward_kinematics, but takes local rotation matrices directly -- lets callers
+    who already have matrices (e.g. decoded from the model's 6D output via rot6d_to_matrix)
+    skip an unnecessary matrix -> axis-angle -> matrix round trip.
+    """
+    N = local_rotmats.shape[0]
+    J_rest = rest_joint_locations(model, betas)
+    if J_rest.dim() == 2:
+        J_rest = J_rest.unsqueeze(0).expand(N, -1, -1)  # broadcast shared betas across N
+
+    global_positions = torch.zeros(N, NUM_BODY_JOINTS, 3, device=local_rotmats.device)
+    global_rotmats = torch.zeros(N, NUM_BODY_JOINTS, 3, 3, device=local_rotmats.device)
+
+    global_positions[:, 0] = J_rest[:, 0]
     global_rotmats[:, 0] = local_rotmats[:, 0]
 
     for j in range(1, NUM_BODY_JOINTS):
         parent = model.parents[j]
-        offset = J_rest[j] - J_rest[parent]  # (3,)
+        offset = J_rest[:, j] - J_rest[:, parent]  # (N, 3)
         global_rotmats[:, j] = global_rotmats[:, parent] @ local_rotmats[:, j]
         global_positions[:, j] = global_positions[:, parent] + torch.einsum(
-            "tij,j->ti", global_rotmats[:, parent], offset
+            "nij,nj->ni", global_rotmats[:, parent], offset
         )
 
     global_positions = global_positions + root_trans.unsqueeze(1)

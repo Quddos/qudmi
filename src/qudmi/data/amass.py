@@ -38,6 +38,9 @@ TRACKER_JOINTS = [HEAD_JOINT, LEFT_WRIST_JOINT, RIGHT_WRIST_JOINT]
 FEATURES_PER_TRACKER = 3 + 6 + 3  # position + 6D rotation + velocity
 INPUT_DIM = len(TRACKER_JOINTS) * FEATURES_PER_TRACKER  # 36
 OUTPUT_DIM = NUM_BODY_JOINTS * 6 + 3  # 22 joint rotations (6D) + root translation = 135
+NUM_BETAS = 16
+GENDER_CODES = {"male": 0, "female": 1, "neutral": 2}  # persisted per-window so evaluation can
+                                                        # run per-sample FK with the right model
 
 
 @dataclass
@@ -45,6 +48,8 @@ class SequenceSample:
     subject_id: str
     X: torch.Tensor  # (num_windows, window, INPUT_DIM)
     Y: torch.Tensor  # (num_windows, OUTPUT_DIM)
+    betas: torch.Tensor  # (num_windows, NUM_BETAS) -- same body shape repeated per window
+    gender_code: torch.Tensor  # (num_windows,) int, see GENDER_CODES
 
 
 def discover_sequences(amass_root: Path) -> list[Path]:
@@ -173,7 +178,12 @@ def process_sequence(
 
     Y = torch.cat([root_rot6d, body_joint_6d, canon_root_trans], dim=-1)  # (M, 135)
 
-    return SequenceSample(subject_id=subject_id_for_path(npz_path), X=X, Y=Y)
+    betas_per_window = betas_t.unsqueeze(0).expand(len(anchors), -1).clone()
+    gender_code = torch.full((len(anchors),), GENDER_CODES[gender], dtype=torch.long)
+
+    return SequenceSample(
+        subject_id=subject_id_for_path(npz_path), X=X, Y=Y, betas=betas_per_window, gender_code=gender_code
+    )
 
 
 def assign_splits(subject_ids, val_frac: float = 0.1, test_frac: float = 0.1) -> dict[str, str]:

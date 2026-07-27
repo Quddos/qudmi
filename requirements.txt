@@ -7,4 +7,5 @@ tqdm
 tensorboard
 onnx
 onnxruntime
+onnxscript
 pytest
