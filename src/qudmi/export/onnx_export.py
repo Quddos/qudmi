@@ -5,8 +5,10 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 
 import numpy as np
+import onnx
 import onnxruntime
 import torch
 
@@ -29,6 +31,17 @@ def export(checkpoint_path: str, out_path: str, window: int = 40):
         opset_version=18,
         dynamic_axes=None,  # fixed shape: the Unity plugin always feeds a full `window`-frame buffer
     )
+
+    # torch's exporter defaults to writing weights to a separate "<name>.onnx.data" file
+    # ("external data") rather than embedding them in the .onnx graph file. That's a footgun
+    # for distribution -- e.g. the Unity package -- since the two files must always travel
+    # together and nothing enforces that. Re-save as a single self-contained file.
+    model_proto = onnx.load(out_path, load_external_data=True)
+    onnx.save(model_proto, out_path, save_as_external_data=False)
+    external_data_file = Path(out_path).with_name(Path(out_path).name + ".data")
+    if external_data_file.exists():
+        external_data_file.unlink()
+
     return dummy_input
 
 
