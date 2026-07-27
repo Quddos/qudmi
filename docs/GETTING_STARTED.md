@@ -11,6 +11,20 @@
 ```bash
 python -m venv .venv
 .venv\Scripts\activate        # Windows
+```
+
+Install PyTorch with CUDA support explicitly — the plain `pip install torch` from PyPI gives you
+a **CPU-only** build with no warning, so check your GPU driver's CUDA version first
+(`nvidia-smi`, top-right corner) and match it to a wheel from
+https://download.pytorch.org/whl/torch/. For a CUDA 13.x driver:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+```
+
+Then install the rest:
+
+```bash
 pip install -r requirements.txt
 ```
 

@@ -1,4 +1,6 @@
-torch>=2.13
+# torch is intentionally NOT listed here — install it separately first, see
+# docs/GETTING_STARTED.md, because the correct wheel depends on your GPU/CUDA setup
+# (the default PyPI wheel is CPU-only and silently gives you no GPU acceleration).
 numpy
 scipy
 tqdm
