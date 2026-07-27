@@ -16,7 +16,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from qudmi.data.amass import discover_sequences, process_sequence, split_for_subject
+from qudmi.data.amass import assign_splits, discover_sequences, process_sequence, subject_id_for_path
 from qudmi.data.smplh import load_smplh_model
 
 
@@ -47,6 +47,12 @@ def main():
         sequences = sequences[: args.limit]
     print(f"Found {len(sequences)} sequence files under {args.amass_root}")
 
+    subject_ids = [subject_id_for_path(p) for p in sequences]
+    split_map = assign_splits(subject_ids)
+    n_subjects = len(set(subject_ids))
+    split_subject_counts = {s: sum(1 for v in split_map.values() if v == s) for s in ("train", "val", "test")}
+    print(f"{n_subjects} distinct subjects -> {split_subject_counts} (by subject, not by window)")
+
     buckets = {"train": [], "val": [], "test": []}
     n_ok, n_skipped, n_failed = 0, 0, 0
     t0 = time.time()
@@ -66,7 +72,7 @@ def main():
             n_skipped += 1
             continue
 
-        split = split_for_subject(sample.subject_id)
+        split = split_map[sample.subject_id]
         buckets[split].append((sample.X.cpu(), sample.Y.cpu()))
         n_ok += 1
 

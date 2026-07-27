@@ -17,6 +17,7 @@ Pipeline per sequence file:
 """
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,8 +65,24 @@ def resample_indices(num_frames: int, src_fps: float, dst_fps: float) -> np.ndar
     return np.arange(0, num_frames, step)
 
 
-def _subject_id(npz_path: Path) -> str:
-    return npz_path.parent.name
+_SUBJECT_PREFIX_RE = re.compile(r"^([A-Za-z]+\d+|s\d+)", re.IGNORECASE)
+
+
+def subject_id_for_path(npz_path: Path) -> str:
+    """Best-effort actor identity from AMASS's per-sequence folder name.
+
+    AMASS folders are named per-recording-session, not per-actor: ACCAD, for example, has
+    "Male2Walking_c3d", "Male2Running_c3d", "Male2MartialArtsKicks_c3d" etc. all for the same
+    physical actor. Using the raw folder name as the split key (as an earlier version of this
+    function did) lets the same actor's body shape leak into both train and val under a
+    different activity folder, silently weakening the held-out-subject evaluation. This regex
+    pulls out the leading "name + number" token (e.g. "Male2", "s001") shared across a given
+    actor's folders; if a folder doesn't match that pattern, it falls back to the full name
+    (better to slightly over-split than to silently merge unrelated recordings).
+    """
+    name = npz_path.parent.name
+    match = _SUBJECT_PREFIX_RE.match(name)
+    return match.group(1) if match else name
 
 
 def process_sequence(
@@ -156,14 +173,34 @@ def process_sequence(
 
     Y = torch.cat([root_rot6d, body_joint_6d, canon_root_trans], dim=-1)  # (M, 135)
 
-    return SequenceSample(subject_id=_subject_id(npz_path), X=X, Y=Y)
+    return SequenceSample(subject_id=subject_id_for_path(npz_path), X=X, Y=Y)
 
 
-def split_for_subject(subject_id: str, val_pct: int = 10, test_pct: int = 10) -> str:
-    """Deterministic train/val/test split by subject, stable across runs without needing a seed."""
-    bucket = int(hashlib.md5(subject_id.encode()).hexdigest(), 16) % 100
-    if bucket < test_pct:
-        return "test"
-    if bucket < test_pct + val_pct:
-        return "val"
-    return "train"
+def assign_splits(subject_ids, val_frac: float = 0.1, test_frac: float = 0.1) -> dict[str, str]:
+    """Deterministic train/val/test split across a full set of subjects.
+
+    A per-subject hash-threshold split (e.g. "put this subject in test if hash(subject) % 100
+    < 10") looks reasonable but silently degenerates when the subject count is small: with only
+    9 actors, there's a real chance *none* of them land in the 10%-wide test bucket by chance --
+    which is exactly what happened on the initial ACCAD-only run. This instead sorts all
+    subjects by a hash (deterministic, but decorrelated from naming so alphabetically-similar
+    actors don't cluster together) and slices explicit counts off the front, guaranteeing
+    non-empty val/test buckets whenever there are enough subjects to make that meaningful.
+    """
+    unique_ids = sorted(set(subject_ids), key=lambda s: hashlib.md5(s.encode()).hexdigest())
+    n = len(unique_ids)
+    if n < 3:
+        return {s: "train" for s in unique_ids}
+
+    n_test = min(max(1, round(n * test_frac)), n - 2)
+    n_val = min(max(1, round(n * val_frac)), n - n_test - 1)
+
+    mapping = {}
+    for i, subject in enumerate(unique_ids):
+        if i < n_test:
+            mapping[subject] = "test"
+        elif i < n_test + n_val:
+            mapping[subject] = "val"
+        else:
+            mapping[subject] = "train"
+    return mapping

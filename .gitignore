@@ -8,6 +8,7 @@ __pycache__/
 # also match src/qudmi/data/, which is a real Python package, not a data directory.
 /data/
 /checkpoints/
+/runs/
 *.onnx
 *.pt
 *.pth
