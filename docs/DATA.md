@@ -16,7 +16,10 @@ accounts or accept license terms on your behalf).
 4. Place the extracted files under `data/amass/<subset_name>/...` at the repo root (this `data/`
    directory is gitignored — motion-capture data is not meant to be committed to the repo).
 5. You'll also need the SMPL+H body model files themselves (joint regressor, template mesh) from
-   https://mano.is.tue.mpg.de/ (same account works) — place under `data/body_models/smplh/`.
+   https://mano.is.tue.mpg.de/ (same account works) — place under
+   `data/body_models/smplx/smplh/` as `SMPLH_FEMALE.pkl` / `SMPLH_MALE.pkl` (this is the layout
+   the site's download zip extracts to; `scripts/preprocess_amass.py` expects it there by
+   default).
 
 Once one small subset is downloaded, the preprocessing script (`src/qudmi/data/`, coming in a
 later step) can run against it — no need to download everything up front.

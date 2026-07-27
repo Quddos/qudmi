@@ -2,10 +2,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+*.egg-info/
 
-# Data & model artifacts (large, not meant for git)
-data/
-checkpoints/
+# Data & model artifacts (large, not meant for git) -- anchored to repo root so this doesn't
+# also match src/qudmi/data/, which is a real Python package, not a data directory.
+/data/
+/checkpoints/
 *.onnx
 *.pt
 *.pth
