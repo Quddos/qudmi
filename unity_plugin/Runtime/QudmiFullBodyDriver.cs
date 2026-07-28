@@ -41,6 +41,12 @@ namespace Qudmi
             "skewing velocity and temporal context even though nothing would crash.")]
         [SerializeField] private float targetSampleFps = 30f;
 
+        [Header("Diagnostics")]
+        [Tooltip("Logs the canonicalized model input once per second, so live values can be " +
+            "compared against the training distribution. A mismatch here means the model is " +
+            "being fed out-of-distribution input, which no amount of retraining fixes.")]
+        [SerializeField] private bool logInputDiagnostics;
+
         private Animator _animator;
         private TrackerWindowBuffer _buffer;
         private IInferenceEngine _engine;
@@ -50,6 +56,7 @@ namespace Qudmi
         private bool _hasPendingPose;
         private bool _loggedRawPoseDiagnostic;
         private bool _loggedAutoDetectWarning;
+        private float _diagnosticTimer;
         private float _timeSinceLastSample;
         private PoseDecoder.DecodedPose _pendingPose;
         private Transform[] _boneTransforms;
@@ -156,6 +163,11 @@ namespace Qudmi
                 return;
             }
 
+            if (logInputDiagnostics)
+            {
+                LogInputDiagnostics(features);
+            }
+
             float[] pose = _engine.Predict(features);
 
             if (!_loggedRawPoseDiagnostic && ContainsNonFinite(pose))
@@ -256,6 +268,36 @@ namespace Qudmi
                     bone.rotation = _globalRotations[j] * _restWorldRotations[j];
                 }
             }
+        }
+
+        /// <summary>
+        /// Dumps the anchor (most recent) frame of the canonicalized input. Compare against the
+        /// training distribution: head should sit at (0, ~1.3-1.7, 0) by construction, and with
+        /// arms hanging down the wrists sit near (-0.14, 0.84, 0.05) and (+0.13, 0.86, -0.01).
+        /// Live values far outside that mean the model is receiving input it never saw in
+        /// training -- the most likely reason being that a VR controller's pose is not the same
+        /// thing as the SMPL wrist joint pose the model was trained on.
+        /// </summary>
+        private void LogInputDiagnostics(float[] features)
+        {
+            _diagnosticTimer += Time.deltaTime;
+            if (_diagnosticTimer < 1f)
+            {
+                return;
+            }
+            _diagnosticTimer = 0f;
+
+            int anchor = (QudmiConstants.WindowLength - 1) * QudmiConstants.InputDim;
+            string[] names = { "head  ", "Lwrist", "Rwrist" };
+            var sb = new System.Text.StringBuilder("QudmiFullBodyDriver live input (canonicalized, metres):");
+            for (int t = 0; t < QudmiConstants.NumTrackers; t++)
+            {
+                int b = anchor + t * QudmiConstants.FeaturesPerTracker;
+                sb.Append($"\n  {names[t]} pos=({features[b]:F3}, {features[b + 1]:F3}, {features[b + 2]:F3})")
+                  .Append($"  rot6d=[{features[b + 3]:F2}, {features[b + 4]:F2}, {features[b + 5]:F2}, ")
+                  .Append($"{features[b + 6]:F2}, {features[b + 7]:F2}, {features[b + 8]:F2}]");
+            }
+            Debug.Log(sb.ToString(), this);
         }
 
         private static bool IsValid(PoseDecoder.DecodedPose pose)
