@@ -10,20 +10,20 @@ namespace Qudmi
     /// falls back to Camera.main for the head and a best-effort search for common XR
     /// Interaction Toolkit controller names for the hands).
     ///
-    /// The Animator needs a Controller assigned -- not None -- with "IK Pass" enabled on its
-    /// base layer. That's what makes Unity actually invoke OnAnimatorIK below, which is the
-    /// *only* context Animator.SetBoneLocalRotation is supported in (confirmed the hard way:
-    /// calling it from LateUpdate produces Unity's own "should only be done in OnAnimatorIK or
-    /// OnStateIK" warning and, worse, NaN bone positions after a few frames). An empty
-    /// Controller with just IK Pass on is enough; it doesn't need any actual states/clips since
-    /// this component fully drives the pose.
+    /// The Animator's Controller can be left as None -- this component writes bone transforms
+    /// directly (the approach procedural full-body IK solutions generally use) rather than going
+    /// through Animator.SetBoneLocalRotation, which would additionally require an IK-Pass-enabled
+    /// Controller and only works inside OnAnimatorIK.
     /// </summary>
     [AddComponentMenu("Qudmi/Qudmi Full Body Driver")]
     [RequireComponent(typeof(Animator))]
     public class QudmiFullBodyDriver : MonoBehaviour
     {
         [SerializeField] private ModelAsset modelAsset;
-        [SerializeField] private BackendType backend = BackendType.GPUCompute;
+        [Tooltip("Defaults to CPU: the GPUCompute backend was observed returning all-NaN output " +
+            "for this model (identical input through the CPU backend is fine), and inference is " +
+            "~2ms/frame on CPU anyway, so GPU isn't needed to hit the frame budget.")]
+        [SerializeField] private BackendType backend = BackendType.CPU;
 
         [Header("Tracked transforms (leave empty to auto-detect)")]
         [SerializeField] private Transform headTransform;
@@ -51,11 +51,15 @@ namespace Qudmi
         private bool _loggedRawPoseDiagnostic;
         private float _timeSinceLastSample;
         private PoseDecoder.DecodedPose _pendingPose;
+        private Transform[] _boneTransforms;
+        private Quaternion[] _restWorldRotations;
+        private Quaternion[] _globalRotations;
 
         private void Awake()
         {
             _animator = GetComponent<Animator>();
             _buffer = new TrackerWindowBuffer();
+            CaptureRestPose();
 
             if (modelAsset != null)
             {
@@ -74,6 +78,26 @@ namespace Qudmi
             (_engine as System.IDisposable)?.Dispose();
         }
 
+        /// <summary>
+        /// Records each mapped bone's bind-pose world orientation, which retargeting needs (see
+        /// ApplyPose). Must run before anything poses the rig, hence Awake.
+        /// </summary>
+        private void CaptureRestPose()
+        {
+            _boneTransforms = new Transform[QudmiConstants.NumBodyJoints];
+            _restWorldRotations = new Quaternion[QudmiConstants.NumBodyJoints];
+            _globalRotations = new Quaternion[QudmiConstants.NumBodyJoints];
+
+            for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
+            {
+                // Null for bones this rig doesn't have -- UpperChest and the toe bones are
+                // genuinely optional in Unity's humanoid definition, so this isn't an error.
+                Transform bone = _animator.GetBoneTransform(QudmiConstants.HumanBodyBoneForJoint[j]);
+                _boneTransforms[j] = bone;
+                _restWorldRotations[j] = bone != null ? bone.rotation : Quaternion.identity;
+            }
+        }
+
         private void LateUpdate()
         {
             if (_engine == null || headTransform == null || leftHandTransform == null || rightHandTransform == null)
@@ -83,14 +107,25 @@ namespace Qudmi
 
             _timeSinceLastSample += Time.deltaTime;
             float samplePeriod = 1f / targetSampleFps;
-            if (_timeSinceLastSample < samplePeriod)
+            if (_timeSinceLastSample >= samplePeriod)
             {
-                return; // not yet time for the next ~30fps sample
+                _timeSinceLastSample %= samplePeriod; // carry over remainder rather than resetting to 0,
+                                                       // so the average sampled rate stays accurate even
+                                                       // when render rate isn't a clean multiple of it
+                SampleAndPredict();
             }
-            _timeSinceLastSample %= samplePeriod; // carry over remainder rather than resetting to 0,
-                                                   // so the average sampled rate stays accurate even
-                                                   // when render rate isn't a clean multiple of it
 
+            // Applied every rendered frame, not just on sample frames: inference runs at the
+            // training rate (~30Hz) but the avatar should still move smoothly at headset refresh
+            // rate, which the smoothing below interpolates toward.
+            if (_hasPendingPose)
+            {
+                ApplyPose();
+            }
+        }
+
+        private void SampleAndPredict()
+        {
             _buffer.PushFrame(
                 headTransform.position, headTransform.rotation,
                 leftHandTransform.position, leftHandTransform.rotation,
@@ -151,16 +186,31 @@ namespace Qudmi
         }
 
         /// <summary>
-        /// The only place Animator.SetBoneLocalRotation is actually supported -- see the class
-        /// remarks above. Only called at all if the Animator's Controller has IK Pass enabled.
+        /// Writes the predicted pose onto the rig, retargeting from SMPL's skeleton convention to
+        /// this particular rig's.
+        ///
+        /// The retargeting is not optional bookkeeping -- it's required for correctness. SMPL's
+        /// FK (see src/qudmi/data/smplh.py) builds the rest pose purely from joint *offsets* with
+        /// no rest rotations, so every SMPL joint's rest frame is the identity, i.e. aligned with
+        /// the world axes. A typical rig (Mixamo, most DCC exports) instead has each bone's rest
+        /// frame aligned along the bone. Feeding SMPL local rotations straight in therefore
+        /// applies each rotation in the wrong frame; the visible symptom is a plausibly-articulated
+        /// but completely wrong pose (a curled-up body that bends oddly on small head movements),
+        /// not an obvious crash.
+        ///
+        /// So: accumulate SMPL locals into global rotations G_j, then place each bone at
+        /// G_j * B_j, where B_j is that bone's captured bind-pose orientation. Left-multiplying by
+        /// G_j applies the model's rotation in world space, about the bone's own rest orientation.
+        /// With G_j = identity this reduces to the untouched bind pose, as it should.
+        ///
+        /// World rotations are assigned (rather than local ones) so that rigs with extra
+        /// intermediate bones -- Mixamo's Spine/Spine1/Spine2 vs. SMPL's three spine joints --
+        /// don't need the two hierarchies to correspond one-to-one. QudmiConstants.Parents is
+        /// ordered parents-before-children, so writing a parent first and then overwriting the
+        /// child's world rotation converges to the right result.
         /// </summary>
-        private void OnAnimatorIK(int layerIndex)
+        private void ApplyPose()
         {
-            if (!_hasPendingPose)
-            {
-                return;
-            }
-
             if (!_hasPreviousPose)
             {
                 _smoothedRotations = _pendingPose.LocalRotations;
@@ -176,15 +226,25 @@ namespace Qudmi
                 _smoothedRootPosition = Vector3.Lerp(_pendingPose.RootPositionUnity, _smoothedRootPosition, smoothing);
             }
 
-            for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
+            // Index 0 already carries the world-recomposed root rotation from PoseDecoder.
+            _globalRotations[0] = _smoothedRotations[0];
+            for (int j = 1; j < QudmiConstants.NumBodyJoints; j++)
             {
-                _animator.SetBoneLocalRotation(QudmiConstants.HumanBodyBoneForJoint[j], _smoothedRotations[j]);
+                _globalRotations[j] = _globalRotations[QudmiConstants.Parents[j]] * _smoothedRotations[j];
             }
 
-            Transform hips = _animator.GetBoneTransform(HumanBodyBones.Hips);
-            if (hips != null)
+            if (_boneTransforms[0] != null)
             {
-                hips.position = _smoothedRootPosition;
+                _boneTransforms[0].position = _smoothedRootPosition;
+            }
+
+            for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
+            {
+                Transform bone = _boneTransforms[j];
+                if (bone != null)
+                {
+                    bone.rotation = _globalRotations[j] * _restWorldRotations[j];
+                }
             }
         }
 
