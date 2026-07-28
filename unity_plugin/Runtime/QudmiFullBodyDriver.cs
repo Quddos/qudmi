@@ -48,6 +48,7 @@ namespace Qudmi
         private Vector3 _smoothedRootPosition;
         private bool _hasPreviousPose;
         private bool _hasPendingPose;
+        private bool _loggedRawPoseDiagnostic;
         private float _timeSinceLastSample;
         private PoseDecoder.DecodedPose _pendingPose;
 
@@ -111,6 +112,28 @@ namespace Qudmi
             }
 
             float[] pose = _engine.Predict(features);
+
+            if (!_loggedRawPoseDiagnostic && ContainsNonFinite(pose))
+            {
+                // One-time detailed dump: distinguishes "the model itself output NaN" from "the
+                // decode math produced NaN from an otherwise-valid model output" -- the generic
+                // warning below can't tell those apart, and they point at very different fixes
+                // (inference backend/model import vs. PoseDecoder.cs).
+                int nanCount = 0;
+                foreach (float v in pose)
+                {
+                    if (float.IsNaN(v) || float.IsInfinity(v)) nanCount++;
+                }
+                int previewCount = System.Math.Min(6, pose.Length);
+                var preview = new float[previewCount];
+                System.Array.Copy(pose, preview, previewCount);
+                Debug.LogWarning(
+                    $"QudmiFullBodyDriver: raw model output already contains {nanCount}/{pose.Length} " +
+                    $"non-finite values (first {previewCount}: {string.Join(", ", preview)}). " +
+                    "This points at the model/inference backend, not PoseDecoder.", this);
+                _loggedRawPoseDiagnostic = true;
+            }
+
             PoseDecoder.DecodedPose decoded = PoseDecoder.Decode(pose, _buffer.AnchorHeadPosition, _buffer.AnchorHeadRotation);
 
             if (!IsValid(decoded))
