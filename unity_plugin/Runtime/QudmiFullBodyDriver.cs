@@ -10,9 +10,13 @@ namespace Qudmi
     /// falls back to Camera.main for the head and a best-effort search for common XR
     /// Interaction Toolkit controller names for the hands).
     ///
-    /// The Animator's Controller should be empty/idle -- this component fully drives the
-    /// humanoid pose every frame via Animator.SetBoneLocalRotation, which only takes effect
-    /// reliably when called after the Animator's own update, hence LateUpdate below.
+    /// The Animator needs a Controller assigned -- not None -- with "IK Pass" enabled on its
+    /// base layer. That's what makes Unity actually invoke OnAnimatorIK below, which is the
+    /// *only* context Animator.SetBoneLocalRotation is supported in (confirmed the hard way:
+    /// calling it from LateUpdate produces Unity's own "should only be done in OnAnimatorIK or
+    /// OnStateIK" warning and, worse, NaN bone positions after a few frames). An empty
+    /// Controller with just IK Pass on is enough; it doesn't need any actual states/clips since
+    /// this component fully drives the pose.
     /// </summary>
     [AddComponentMenu("Qudmi/Qudmi Full Body Driver")]
     [RequireComponent(typeof(Animator))]
@@ -43,7 +47,9 @@ namespace Qudmi
         private Quaternion[] _smoothedRotations;
         private Vector3 _smoothedRootPosition;
         private bool _hasPreviousPose;
+        private bool _hasPendingPose;
         private float _timeSinceLastSample;
+        private PoseDecoder.DecodedPose _pendingPose;
 
         private void Awake()
         {
@@ -95,27 +101,56 @@ namespace Qudmi
             }
 
             float[] features = _buffer.ComputeFeatures();
+            if (ContainsNonFinite(features))
+            {
+                // Distinguishes "bad tracking data went in" from "the model/decode produced
+                // something bad" -- e.g. if the XR device hasn't started delivering real poses
+                // yet, this fires instead of the pose-side check below.
+                Debug.LogWarning("QudmiFullBodyDriver: tracker input contains NaN/Infinity, skipping this frame.", this);
+                return;
+            }
+
             float[] pose = _engine.Predict(features);
             PoseDecoder.DecodedPose decoded = PoseDecoder.Decode(pose, _buffer.AnchorHeadPosition, _buffer.AnchorHeadRotation);
 
-            ApplyPose(decoded);
+            if (!IsValid(decoded))
+            {
+                // Seen in practice before the XR device is actually delivering tracked poses
+                // (e.g. mid Quest Link handshake): held-static/uninitialized input can push the
+                // model into a degenerate output. Skip this frame rather than write NaN into
+                // the rig -- silently freezing on the last good pose is far less destructive.
+                Debug.LogWarning("QudmiFullBodyDriver: discarding a non-finite pose prediction this frame.", this);
+                return;
+            }
+
+            _pendingPose = decoded;
+            _hasPendingPose = true;
         }
 
-        private void ApplyPose(PoseDecoder.DecodedPose decoded)
+        /// <summary>
+        /// The only place Animator.SetBoneLocalRotation is actually supported -- see the class
+        /// remarks above. Only called at all if the Animator's Controller has IK Pass enabled.
+        /// </summary>
+        private void OnAnimatorIK(int layerIndex)
         {
+            if (!_hasPendingPose)
+            {
+                return;
+            }
+
             if (!_hasPreviousPose)
             {
-                _smoothedRotations = decoded.LocalRotations;
-                _smoothedRootPosition = decoded.RootPositionUnity;
+                _smoothedRotations = _pendingPose.LocalRotations;
+                _smoothedRootPosition = _pendingPose.RootPositionUnity;
                 _hasPreviousPose = true;
             }
             else
             {
                 for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
                 {
-                    _smoothedRotations[j] = Quaternion.Slerp(decoded.LocalRotations[j], _smoothedRotations[j], smoothing);
+                    _smoothedRotations[j] = Quaternion.Slerp(_pendingPose.LocalRotations[j], _smoothedRotations[j], smoothing);
                 }
-                _smoothedRootPosition = Vector3.Lerp(decoded.RootPositionUnity, _smoothedRootPosition, smoothing);
+                _smoothedRootPosition = Vector3.Lerp(_pendingPose.RootPositionUnity, _smoothedRootPosition, smoothing);
             }
 
             for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
@@ -128,6 +163,39 @@ namespace Qudmi
             {
                 hips.position = _smoothedRootPosition;
             }
+        }
+
+        private static bool IsValid(PoseDecoder.DecodedPose pose)
+        {
+            if (!IsFinite(pose.RootPositionUnity))
+            {
+                return false;
+            }
+            foreach (Quaternion q in pose.LocalRotations)
+            {
+                if (float.IsNaN(q.x) || float.IsNaN(q.y) || float.IsNaN(q.z) || float.IsNaN(q.w) ||
+                    float.IsInfinity(q.x) || float.IsInfinity(q.y) || float.IsInfinity(q.z) || float.IsInfinity(q.w))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsFinite(Vector3 v) =>
+            !float.IsNaN(v.x) && !float.IsNaN(v.y) && !float.IsNaN(v.z) &&
+            !float.IsInfinity(v.x) && !float.IsInfinity(v.y) && !float.IsInfinity(v.z);
+
+        private static bool ContainsNonFinite(float[] values)
+        {
+            foreach (float v in values)
+            {
+                if (float.IsNaN(v) || float.IsInfinity(v))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void AutoDetectTransformsIfNeeded()
