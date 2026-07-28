@@ -66,7 +66,12 @@ namespace Qudmi
         private void Awake()
         {
             _animator = GetComponent<Animator>();
-            _buffer = new TrackerWindowBuffer();
+            _buffer = new TrackerWindowBuffer
+            {
+                // Baked defaults so the component does something sensible with no setup; press
+                // the Inspector's Calibrate button (or call Calibrate()) for a rig-specific fit.
+                RotationOffsets = TrackerCalibration.DefaultOffsets(),
+            };
             CaptureRestPose();
 
             if (modelAsset != null)
@@ -84,6 +89,35 @@ namespace Qudmi
         private void OnDestroy()
         {
             (_engine as System.IDisposable)?.Dispose();
+        }
+
+        /// <summary>
+        /// Fits the tracker corrections to this wearer and rig. Call it (or press Calibrate in
+        /// the Inspector during Play) while standing upright, facing forward, arms hanging down --
+        /// the pose the reference values in TrackerCalibration were measured from.
+        ///
+        /// Solves both corrections at once: the per-tracker rotation offsets, and a uniform
+        /// position scale mapping this wearer's height onto the training set's.
+        /// </summary>
+        public void Calibrate()
+        {
+            if (_buffer == null || !_buffer.IsFull)
+            {
+                Debug.LogWarning("QudmiFullBodyDriver: can't calibrate yet -- still filling the " +
+                    "initial tracking window. Wait a second in Play mode and try again.", this);
+                return;
+            }
+
+            _buffer.RotationOffsets = TrackerCalibration.ComputeOffsets(_buffer.CurrentCanonicalRotations());
+
+            float headHeight = _buffer.AnchorHeadPosition.y;
+            if (headHeight > 0.5f)
+            {
+                _buffer.PositionScale = TrackerCalibration.ReferenceHeadHeight / headHeight;
+            }
+
+            Debug.Log($"QudmiFullBodyDriver: calibrated. Head height {headHeight:F2}m -> " +
+                $"position scale {_buffer.PositionScale:F3}, rotation offsets fitted to this rig.", this);
         }
 
         /// <summary>
@@ -191,7 +225,8 @@ namespace Qudmi
                 _loggedRawPoseDiagnostic = true;
             }
 
-            PoseDecoder.DecodedPose decoded = PoseDecoder.Decode(pose, _buffer.AnchorHeadPosition, _buffer.AnchorHeadRotation);
+            PoseDecoder.DecodedPose decoded = PoseDecoder.Decode(
+                pose, _buffer.AnchorHeadPosition, _buffer.AnchorHeadRotation, _buffer.PositionScale);
 
             if (!IsValid(decoded))
             {

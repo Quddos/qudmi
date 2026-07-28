@@ -24,7 +24,11 @@ namespace Qudmi
             public Vector3 RootPositionUnity;
         }
 
-        public static DecodedPose Decode(float[] pose135, Vector3 anchorHeadPositionPython, Quaternion anchorHeadRotationPython)
+        /// <param name="positionScale">The scale TrackerWindowBuffer applied to the input; the
+        /// predicted root translation comes back in that same scaled space and has to be divided
+        /// out before it is combined with the (unscaled) real-world anchor position.</param>
+        public static DecodedPose Decode(float[] pose135, Vector3 anchorHeadPositionPython,
+            Quaternion anchorHeadRotationPython, float positionScale = 1f)
         {
             Vector3 anchorHeadPosHoriz = anchorHeadPositionPython;
             anchorHeadPosHoriz.y = 0f;
@@ -39,6 +43,10 @@ namespace Qudmi
             }
 
             Vector3 rootTransCanonical = new Vector3(pose135[132], pose135[133], pose135[134]);
+            if (positionScale > 0f)
+            {
+                rootTransCanonical /= positionScale;
+            }
             Vector3 worldTransPython = yaw * rootTransCanonical + anchorHeadPosHoriz;
 
             return new DecodedPose

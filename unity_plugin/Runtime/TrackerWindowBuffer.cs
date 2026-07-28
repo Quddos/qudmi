@@ -32,6 +32,35 @@ namespace Qudmi
 
         public bool IsFull => _count >= _window;
 
+        /// <summary>
+        /// Per-tracker rotation corrections, applied on the right so they compose cleanly with the
+        /// left-multiplied yaw canonicalization. Null (the default) means no correction, which is
+        /// what the Python-parity tests exercise; QudmiFullBodyDriver supplies real values from
+        /// TrackerCalibration. See TrackerCalibration for why this is needed at all.
+        /// </summary>
+        public Quaternion[] RotationOffsets { get; set; }
+
+        /// <summary>
+        /// Uniform scale applied to canonicalized positions (and hence velocities), used to map a
+        /// wearer's body scale into the range the model was trained on.
+        /// </summary>
+        public float PositionScale { get; set; } = 1f;
+
+        /// <summary>
+        /// The uncorrected canonical rotation of each tracker at the current frame -- the input
+        /// TrackerCalibration.ComputeOffsets needs in order to solve for the offsets.
+        /// </summary>
+        public Quaternion[] CurrentCanonicalRotations()
+        {
+            Quaternion invYaw = InverseYaw(AnchorHeadRotation);
+            var result = new Quaternion[QudmiConstants.NumTrackers];
+            for (int tr = 0; tr < QudmiConstants.NumTrackers; tr++)
+            {
+                result[tr] = invYaw * _rotations[_window - 1][tr];
+            }
+            return result;
+        }
+
         /// <summary>The current (most recent) frame's head position/rotation, in python-space
         /// (post-conversion). Exposed so the pose decoder can recompose the root joint's
         /// world-space transform using the same anchor this window was canonicalized against.</summary>
@@ -85,9 +114,15 @@ namespace Qudmi
                 for (int tr = 0; tr < QudmiConstants.NumTrackers; tr++)
                 {
                     Vector3 shifted = _positions[t][tr] - anchorHeadPosHoriz;
-                    canonPos[t][tr] = invYaw * shifted;
+                    // Scaling here also scales the velocities below, since those are differences
+                    // of these same canonical positions.
+                    canonPos[t][tr] = (invYaw * shifted) * PositionScale;
 
                     Quaternion canonRot = invYaw * _rotations[t][tr];
+                    if (RotationOffsets != null)
+                    {
+                        canonRot *= RotationOffsets[tr];
+                    }
                     Rotation6D.Encode(canonRot, canonRot6D[t], tr * 6);
                 }
             }

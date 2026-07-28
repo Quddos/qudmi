@@ -31,6 +31,23 @@ namespace Qudmi.Editor
             }
 
             DrawDefaultInspector();
+
+            EditorGUILayout.Space();
+            using (new EditorGUI.DisabledScope(!Application.isPlaying))
+            {
+                if (GUILayout.Button("Calibrate (stand upright, arms down)", GUILayout.Height(28)))
+                {
+                    driver.Calibrate();
+                }
+            }
+
+            if (!Application.isPlaying)
+            {
+                EditorGUILayout.HelpBox(
+                    "Calibration runs against live tracking, so it's only available in Play mode. " +
+                    "Baked defaults are used until then -- see TrackerCalibration.",
+                    MessageType.Info);
+            }
         }
     }
 }
