@@ -22,12 +22,30 @@ Drop-in full-body avatar motion from a VR headset + two hand controllers. No ML 
 3. Assign the `ModelAsset` in the Inspector. Assign Head/Left Hand/Right Hand transforms if you
    have a specific XR rig hierarchy, or leave them empty -- the component falls back to
    `Camera.main` for the head and a best-effort search for common XR Interaction Toolkit
-   controller object names for the hands.
-4. Make sure the Animator's Controller is empty/idle -- this component fully drives the
-   humanoid pose every frame, and fighting with an animation clip will look wrong.
+   controller object names for the hands. If you're using an XR rig prefab (e.g. XR Interaction
+   Toolkit's "XR Origin (XR Rig)"), make sure the scene doesn't *also* have Unity's default
+   `Main Camera` left over from a new-scene template -- two GameObjects tagged `MainCamera` makes
+   `Camera.main` ambiguous, and auto-detect may grab the wrong (untracked) one. Delete the
+   leftover default camera.
+4. The Animator needs a **Controller assigned (not "None")**, with **IK Pass enabled on its base
+   layer** -- an empty Controller with no states/clips is fine, since this component fully drives
+   the pose every frame. This is required, not optional: `Animator.SetBoneLocalRotation` (what
+   this component uses to apply the pose) only works when called from Unity's `OnAnimatorIK`
+   callback, and Unity only invokes that callback when IK Pass is on. Skipping this doesn't fail
+   loudly -- the symptom is Console spam ("should only be done in OnAnimatorIK or OnStateIK")
+   escalating into NaN bone positions within a few seconds, found the hard way during an actual
+   headset test.
 5. Press Play.
 
 That's the entire integration. No inference code, no per-joint wiring.
+
+### Creating the empty IK-pass Controller
+
+1. In the Project window: right-click → Create → Animator Controller. Name it anything (e.g.
+   `QudmiIKPass`).
+2. Double-click it to open the Animator window. Select the **Base Layer** (left panel), click the
+   gear icon next to it, and check **IK Pass**.
+3. Assign this Controller to your character's Animator component. No states or clips needed.
 
 ## Why Unity's Inference Engine instead of raw ONNX Runtime
 
@@ -58,6 +76,8 @@ Unity -batchmode -nographics -runTests -testPlatform EditMode -projectPath <proj
 
 - Verified: the package compiles cleanly against Unity 6000.4 + Inference Engine 2.2, and all
   three parity tests (input encoding, per-joint local rotation decode, root recomposition) pass.
-- Not yet verified: a live end-to-end run with a real headset driving a real avatar in Play
-  mode -- that's a separate, later roadmap item (docs/ROADMAP.md) requiring a physical XR
-  device, distinct from this package's math/compile correctness.
+- In progress: a live end-to-end run with a real Quest headset driving a real Mixamo Humanoid
+  avatar. A real bug (SetBoneLocalRotation called outside OnAnimatorIK, cascading into NaN bone
+  positions) was found and fixed via this testing, not caught by the parity tests -- those check
+  the math functions in isolation, not the MonoBehaviour's actual Unity lifecycle usage. Still to
+  confirm: the avatar visibly tracking head/hand movement correctly once IK Pass is enabled.
