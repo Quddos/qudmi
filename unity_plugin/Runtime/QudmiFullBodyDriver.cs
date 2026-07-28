@@ -49,6 +49,7 @@ namespace Qudmi
         private bool _hasPreviousPose;
         private bool _hasPendingPose;
         private bool _loggedRawPoseDiagnostic;
+        private bool _loggedAutoDetectWarning;
         private float _timeSinceLastSample;
         private PoseDecoder.DecodedPose _pendingPose;
         private Transform[] _boneTransforms;
@@ -70,7 +71,7 @@ namespace Qudmi
                 Debug.LogWarning("QudmiFullBodyDriver: no model assigned, this component will do nothing.", this);
             }
 
-            AutoDetectTransformsIfNeeded();
+            // Deliberately not resolving tracked transforms here -- see AutoDetectTransformsIfNeeded.
         }
 
         private void OnDestroy()
@@ -100,9 +101,18 @@ namespace Qudmi
 
         private void LateUpdate()
         {
-            if (_engine == null || headTransform == null || leftHandTransform == null || rightHandTransform == null)
+            if (_engine == null)
             {
                 return;
+            }
+
+            if (headTransform == null || leftHandTransform == null || rightHandTransform == null)
+            {
+                AutoDetectTransformsIfNeeded();
+                if (headTransform == null || leftHandTransform == null || rightHandTransform == null)
+                {
+                    return; // try again next frame
+                }
             }
 
             _timeSinceLastSample += Time.deltaTime;
@@ -281,6 +291,18 @@ namespace Qudmi
             return false;
         }
 
+        /// <summary>
+        /// Resolves the tracked transforms by name, retried every frame until it succeeds rather
+        /// than running once at startup.
+        ///
+        /// The retry matters: XRI's XRInputModalityManager deactivates the controller GameObjects
+        /// on startup and only re-enables whichever set matches the detected input mode
+        /// (controllers vs. hand tracking). GameObject.Find ignores inactive objects, so a
+        /// one-shot lookup in Awake is a race against that manager -- it succeeds or silently
+        /// fails depending on script execution order, leaving the avatar frozen with only the
+        /// head resolved (Camera.main is always active, the controllers are not). Retrying picks
+        /// them up the moment they're enabled, and also covers controllers powered on late.
+        /// </summary>
         private void AutoDetectTransformsIfNeeded()
         {
             if (headTransform == null && Camera.main != null)
@@ -298,11 +320,24 @@ namespace Qudmi
                 rightHandTransform = FindByCommonName("RightHand Controller", "Right Controller", "RightHand");
             }
 
-            if (headTransform == null || leftHandTransform == null || rightHandTransform == null)
+            bool resolved = headTransform != null && leftHandTransform != null && rightHandTransform != null;
+
+            if (resolved && _loggedAutoDetectWarning)
             {
+                Debug.Log("QudmiFullBodyDriver: tracked transforms resolved, driving avatar now.", this);
+                _loggedAutoDetectWarning = false;
+            }
+            else if (!resolved && !_loggedAutoDetectWarning)
+            {
+                // Logged once, not every frame, since this is an expected transient state while
+                // the XR rig starts up rather than necessarily a misconfiguration.
                 Debug.LogWarning(
-                    "QudmiFullBodyDriver: couldn't auto-detect all tracked transforms. " +
-                    "Assign Head/Left Hand/Right Hand manually in the Inspector.", this);
+                    "QudmiFullBodyDriver: waiting on tracked transforms " +
+                    $"(head={(headTransform != null ? "ok" : "missing")}, " +
+                    $"left={(leftHandTransform != null ? "ok" : "missing")}, " +
+                    $"right={(rightHandTransform != null ? "ok" : "missing")}). " +
+                    "Retrying each frame; assign them manually in the Inspector if this persists.", this);
+                _loggedAutoDetectWarning = true;
             }
         }
 
