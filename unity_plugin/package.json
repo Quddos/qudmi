@@ -2,18 +2,29 @@
     "name": "com.qudmi.fullbody",
     "version": "0.1.0",
     "displayName": "Qudmi Full Body",
-    "description": "Drop-in full-body avatar motion from a VR headset + two hand controllers, driven by an open, free, on-device model. No ML code required -- add one component to a Humanoid-rigged avatar.",
+    "description": "Full-body avatar motion from a VR headset and two hand controllers, running on-device in real time. Add one component to a Humanoid-rigged avatar -- no ML code, no extra trackers, no per-joint wiring.\n\nNOTE: the bundled model weights are trained on AMASS and are licensed for non-commercial research use only. The package code is MIT.",
     "unity": "6000.0",
     "license": "MIT",
+    "author": {
+        "name": "Raheem Quddus",
+        "url": "https://github.com/Quddos"
+    },
+    "documentationUrl": "https://github.com/Quddos/qudmi/blob/main/unity_plugin/README.md",
+    "changelogUrl": "https://github.com/Quddos/qudmi/releases",
+    "licensesUrl": "https://github.com/Quddos/qudmi/blob/main/LICENSE",
     "dependencies": {
         "com.unity.ai.inference": "2.2.1"
     },
     "keywords": [
         "vr",
         "xr",
+        "openxr",
         "avatar",
         "full-body",
+        "body-tracking",
         "ik",
-        "machine-learning"
+        "inverse-kinematics",
+        "machine-learning",
+        "pose-estimation"
     ]
 }

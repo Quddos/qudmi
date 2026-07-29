@@ -4,18 +4,40 @@ Drop-in full-body avatar motion from a VR headset + two hand controllers. No ML 
 
 ## Install
 
-1. Open Package Manager (`Window > Package Manager`) in your Unity project (Unity 6000.0+).
-2. `+` > "Install package from disk..." (or add a git/local dependency to `Packages/manifest.json`
-   pointing at this `unity_plugin/` folder).
-3. This package depends on `com.unity.ai.inference` (Unity's inference package, formerly named
-   "Sentis" -- the class names Sentis-era tutorials reference still work, just under the
-   `Unity.InferenceEngine` namespace now). Package Manager resolves it automatically.
+Unity 6000.0 or newer. In your project: **Window > Package Manager > + > Install package from git
+URL**, and paste:
 
-## Use
+```
+https://github.com/Quddos/qudmi.git?path=/unity_plugin
+```
 
-1. Import your exported model (`checkpoints/qudmi_v0.onnx`, see the main repo's
-   `src/qudmi/export/onnx_export.py`) into the project as a Unity asset -- Inference Engine
-   recognizes `.onnx` files automatically as a `ModelAsset`.
+That pulls the code *and* the trained model, so it works immediately with nothing else to
+download. `com.unity.ai.inference` (Unity's inference package, formerly "Sentis" -- Sentis-era
+class names still work, under the `Unity.InferenceEngine` namespace) resolves automatically.
+
+To pin a version, append a tag: `...?path=/unity_plugin#v0.1.0`.
+
+> **Why not searchable in Package Manager?** Unity's built-in registry is curated by Unity; you
+> cannot publish to it directly. The searchable route for open-source packages is
+> [OpenUPM](https://openupm.com), a community scoped registry -- planned, and it needs the git
+> URL install above to be proven first. The Asset Store is not an option here: its content is
+> used commercially, and these weights are licensed for non-commercial research only.
+
+## Quick start
+
+**Window > Qudmi > Setup Wizard** does the whole setup and checks for the things that commonly go
+wrong silently — a leftover `Main Camera` making `Camera.main` ambiguous, an Animator Controller
+fighting the driver, a rig imported as Generic rather than Humanoid. It can also drop a preview
+clone in front of you, which matters more than it sounds: you are *inside* the avatar, so it is
+otherwise the one thing you cannot see.
+
+The manual equivalent is below if you would rather wire it yourself.
+
+## Manual setup
+
+1. The model ships with the package at `Runtime/Model/qudmi_v0.onnx` — Inference Engine imports
+   `.onnx` files automatically as a `ModelAsset`. (To use your own, export one with the main
+   repo's `src/qudmi/export/onnx_export.py`.)
 2. On any GameObject with a **Humanoid**-rigged `Animator` (check the model's import settings:
    Rig > Animation Type > Humanoid), add the **Qudmi Full Body Driver** component
    (`Qudmi/Qudmi Full Body Driver` in the Add Component menu).
