@@ -39,7 +39,7 @@ def load_body_models(body_model_dir: Path, device: str) -> dict:
     return models
 
 
-def run_epoch(model, loader, optimizer, device, models, w_pos, train: bool):
+def run_epoch(model, loader, optimizer, device, models, w_pos, w_trans, train: bool):
     model.train(train)
     totals = {"loss": 0.0, "rot_loss": 0.0, "trans_loss": 0.0, "pos_loss": 0.0}
     n_batches = 0
@@ -50,7 +50,7 @@ def run_epoch(model, loader, optimizer, device, models, w_pos, train: bool):
             betas, gender_code = betas.to(device), gender_code.to(device)
 
             pred = model(X)
-            loss, parts = pose_loss(pred, Y, betas, gender_code, models, w_pos=w_pos)
+            loss, parts = pose_loss(pred, Y, betas, gender_code, models, w_pos=w_pos, w_trans=w_trans)
 
             if train:
                 optimizer.zero_grad()
@@ -62,7 +62,12 @@ def run_epoch(model, loader, optimizer, device, models, w_pos, train: bool):
                 totals[k] += v
             n_batches += 1
 
-    return {k: v / n_batches for k, v in totals.items()}
+    averaged = {k: v / n_batches for k, v in totals.items()}
+    # Checkpointing and early stopping track this rather than the raw total: it covers exactly
+    # what the runtime uses (joint orientations, and where those put the joints) and excludes the
+    # root translation, which the Unity side discards in favour of the tracked head position.
+    averaged["pose_quality"] = averaged["rot_loss"] + w_pos * averaged["pos_loss"]
+    return averaged
 
 
 def main():
@@ -81,6 +86,12 @@ def main():
                         help="stop after this many epochs without a new best val loss")
     parser.add_argument("--w-pos", type=float, default=0.5,
                         help="weight of the FK joint-position loss (DTP uses 0.5)")
+    parser.add_argument("--w-trans", type=float, default=0.1,
+                        help="weight of the root-translation loss. Low by default: the Unity "
+                             "runtime anchors the rig by the tracked head and ignores the "
+                             "predicted root position, and this term generalizes ~10x worse "
+                             "across datasets than the others, so weighting it highly would let "
+                             "an output we discard dominate the gradients.")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -106,8 +117,8 @@ def main():
     best_val, best_epoch, t0 = float("inf"), 0, time.time()
 
     for epoch in range(1, args.epochs + 1):
-        tr = run_epoch(model, train_loader, optimizer, args.device, models, args.w_pos, train=True)
-        va = run_epoch(model, val_loader, optimizer, args.device, models, args.w_pos, train=False)
+        tr = run_epoch(model, train_loader, optimizer, args.device, models, args.w_pos, args.w_trans, train=True)
+        va = run_epoch(model, val_loader, optimizer, args.device, models, args.w_pos, args.w_trans, train=False)
         scheduler.step()
 
         for k in tr:
@@ -117,24 +128,24 @@ def main():
 
         torch.save(model.state_dict(), checkpoint_dir / "last.pt")
         marker = ""
-        if va["loss"] < best_val:
-            best_val, best_epoch = va["loss"], epoch
+        if va["pose_quality"] < best_val:
+            best_val, best_epoch = va["pose_quality"], epoch
             torch.save(model.state_dict(), checkpoint_dir / "best.pt")
             marker = "  <- best"
 
         print(f"epoch {epoch:4d}/{args.epochs} | train {tr['loss']:.5f} "
               f"(rot {tr['rot_loss']:.5f} trans {tr['trans_loss']:.5f} pos {tr['pos_loss']:.5f}) | "
               f"val {va['loss']:.5f} (rot {va['rot_loss']:.5f} trans {va['trans_loss']:.5f} "
-              f"pos {va['pos_loss']:.5f}) | lr {scheduler.get_last_lr()[0]:.2e} | "
+              f"pos {va['pos_loss']:.5f}) | quality {va['pose_quality']:.5f} | lr {scheduler.get_last_lr()[0]:.2e} | "
               f"{time.time() - t0:.0f}s{marker}")
 
         if epoch - best_epoch >= args.patience:
             print(f"\nEarly stop: no improvement for {args.patience} epochs "
-                  f"(best {best_val:.5f} at epoch {best_epoch}).")
+                  f"(best pose-quality {best_val:.5f} at epoch {best_epoch}).")
             break
 
     writer.close()
-    print(f"Done. Best val loss {best_val:.5f} (epoch {best_epoch}). Checkpoints in {checkpoint_dir}/")
+    print(f"Done. Best val pose-quality {best_val:.5f} (epoch {best_epoch}). Checkpoints in {checkpoint_dir}/")
 
 
 if __name__ == "__main__":
