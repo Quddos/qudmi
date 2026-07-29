@@ -16,6 +16,9 @@ any engine can run locally at real-time latency.
 > 94mm test** on the official AMASS split — for reference, published three-point work reports
 > ~60-70mm. Full numbers and honest limitations in [docs/RESULTS.md](docs/RESULTS.md).
 >
+> **Weights:** [huggingface.co/quddusr/qudmi](https://huggingface.co/quddusr/qudmi) ·
+> [GitHub release v0.1.0](https://github.com/Quddos/qudmi/releases/tag/v0.1.0)
+>
 > ⚠️ **The trained weights are research-only.** AMASS's license prohibits training networks on it
 > for commercial use of any kind, so the weights cannot ship in a commercial product. The code is
 > MIT and freely reusable. See [docs/RESULTS.md#licensing-important](docs/RESULTS.md).
