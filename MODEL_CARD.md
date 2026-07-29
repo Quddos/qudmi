@@ -94,8 +94,34 @@ avatars, movement analysis, animation authoring.
 Not suitable as-is for clinical, diagnostic or safety-critical use — accuracy has not been
 validated for any of those, and the lower body is inferred.
 
-## Citation
+## Author
 
-If AMASS-derived work like this is useful to you, cite AMASS (Mahmood et al. 2019) and the
-sparse-tracking methods this builds on: AvatarPoser (Jiang et al. 2022), AGRoL (Du et al. 2023),
-and DTP (Liu et al., *Virtual Reality* 28:116, 2024).
+**Raheem Quddus** ([@Quddos](https://github.com/Quddos) on GitHub,
+[@quddusr](https://huggingface.co/quddusr) on Hugging Face).
+
+Qudmi's model, training pipeline and Unity runtime are original work. The design draws on
+published research in this area, credited below.
+
+## Citing Qudmi
+
+```bibtex
+@software{quddus2026qudmi,
+  author  = {Quddus, Raheem},
+  title   = {Qudmi: Full-body VR pose estimation from sparse head and hand tracking},
+  year    = {2026},
+  url     = {https://github.com/Quddos/qudmi}
+}
+```
+
+## Prior work this builds on
+
+These are acknowledgements, not the citation for this project. Cite them in addition to Qudmi if
+you publish work using it.
+
+- **AMASS** (Mahmood et al. 2019) — the motion capture corpus the model is trained on. Citing it
+  is a condition of its license.
+- **6D rotation representation** (Zhou et al. 2019) — the output encoding.
+- **AvatarPoser** (Jiang et al. 2022) and **AGRoL** (Du et al. 2023) — prior three-point
+  sparse-tracking methods; their reported accuracy is the benchmark Qudmi is measured against.
+- **DTP** (Liu et al., *Virtual Reality* 28:116, 2024) — six-sensor method whose loss design
+  (rotation + FK position weighting) and T-pose sensor calibration informed this implementation.
