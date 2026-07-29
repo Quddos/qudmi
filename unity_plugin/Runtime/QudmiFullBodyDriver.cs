@@ -55,6 +55,13 @@ namespace Qudmi
             "complete body. Turn off for a third-person or spectator camera.")]
         [SerializeField] private bool hideHeadInFirstPerson = true;
 
+        [Tooltip("Corrects the arms so the avatar's wrists land exactly on the tracked " +
+            "controllers. The hand position is a model input, but the network predicts rotations " +
+            "and forward kinematics doesn't guarantee the wrist returns to where the controller " +
+            "actually is -- measured error is ~107mm, which is clearly visible when you tuck a " +
+            "hand to your chest. Keeps the elbow direction the model predicted.")]
+        [SerializeField] private bool snapHandsToControllers = true;
+
         [Header("Calibration")]
         [Tooltip("Seconds after tracking starts before calibration is fitted automatically. " +
             "Exists because the wearer cannot be standing in the calibration pose and clicking a " +
@@ -367,6 +374,33 @@ namespace Qudmi
                 {
                     root.position += headTransform.position - head.position;
                 }
+            }
+
+            // After head anchoring, so the arms are solved against the rig's final world position
+            // rather than a location it is about to be moved away from.
+            if (snapHandsToControllers)
+            {
+                SolveArm(16, 18, 20, leftHandTransform);   // L_shoulder, L_elbow, L_wrist
+                SolveArm(17, 19, 21, rightHandTransform);  // R_shoulder, R_elbow, R_wrist
+            }
+        }
+
+        private void SolveArm(int upperJoint, int lowerJoint, int endJoint, Transform target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            Transform upper = _boneTransforms[upperJoint];
+            Transform lower = _boneTransforms[lowerJoint];
+            Transform end = _boneTransforms[endJoint];
+            if (upper != null && lower != null && end != null)
+            {
+                // The controller pose is what gets fed in as the wrist, so the model's notion of
+                // "wrist" is already the controller position -- targeting it directly is
+                // consistent with training rather than an extra assumption.
+                TwoBoneIK.Solve(upper, lower, end, target.position);
             }
         }
 
