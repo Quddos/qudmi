@@ -65,14 +65,14 @@ they may be used for research, education, and non-commercial projects, but not s
 commercial product or service.
 
 This is a genuine constraint on the project's goal of a drop-in component for any developer,
-since most game studios -- including indies -- ship commercially. Published work in this area
+since most game studios - including indies - ship commercially. Published work in this area
 (AvatarPoser, AGRoL, DTP) is released on the same non-commercial basis, so this is normal for
 research artifacts, but it is not what a general-purpose SDK needs.
 
 Resolving it means retraining on motion data whose license permits commercial use. The original
 CMU Graphics Lab Motion Capture Database is the most promising candidate ("free for all uses"),
 but it is distributed as raw marker/skeleton data rather than SMPL parameters, so it would need
-fitting to the SMPL body model first -- a real piece of work, not a config change.
+fitting to the SMPL body model first - a real piece of work, not a config change.
 
 Until then: **the architecture, training pipeline, and Unity runtime are freely reusable; the
 released weights are research-only.**
