@@ -31,9 +31,20 @@ namespace Qudmi
             "the scene is used.")]
         [SerializeField] private Animator sourceAvatar;
 
+        [Tooltip("Keeps the clone's lowest foot on the ground plane it was placed at. The driven " +
+            "avatar solves the equivalent problem by anchoring to the tracked headset, but a " +
+            "preview has no tracked target, so without this it sinks or floats by however much " +
+            "the predicted hip height is off.")]
+        [SerializeField] private bool keepFeetOnGround = true;
+
+        // Ankles and toes. Toes are optional in Unity's humanoid rig, hence the null checks.
+        private static readonly int[] FootJoints = { 7, 8, 10, 11 };
+
         private Animator _animator;
         private Transform[] _sourceBones;
         private Transform[] _targetBones;
+        private Vector3 _hipsBindLocalPosition;
+        private float _groundY;
         private bool _warned;
 
         private void Awake()
@@ -64,6 +75,13 @@ namespace Qudmi
                 _sourceBones[j] = sourceAvatar.GetBoneTransform(bone);
                 _targetBones[j] = _animator.GetBoneTransform(bone);
             }
+
+            _groundY = transform.position.y;
+            Transform hips = _targetBones[QudmiConstants.RootJoint];
+            if (hips != null)
+            {
+                _hipsBindLocalPosition = hips.localPosition;
+            }
         }
 
         private void LateUpdate()
@@ -81,6 +99,15 @@ namespace Qudmi
                 return;
             }
 
+            Transform hips = _targetBones[QudmiConstants.RootJoint];
+
+            // Reset before re-grounding so the offset is recomputed from a known state each frame
+            // rather than accumulated on top of the previous frame's correction.
+            if (hips != null)
+            {
+                hips.localPosition = _hipsBindLocalPosition;
+            }
+
             for (int j = 0; j < QudmiConstants.NumBodyJoints; j++)
             {
                 if (_sourceBones[j] != null && _targetBones[j] != null)
@@ -88,6 +115,25 @@ namespace Qudmi
                     // Local, not world: this keeps the clone's pose relative to its own root, so
                     // it stays where it was placed and faces whichever way it was turned.
                     _targetBones[j].localRotation = _sourceBones[j].localRotation;
+                }
+            }
+
+            if (keepFeetOnGround && hips != null)
+            {
+                // Measured after the rotations are applied, since those decide where the feet
+                // actually end up.
+                float lowest = float.MaxValue;
+                foreach (int j in FootJoints)
+                {
+                    if (_targetBones[j] != null)
+                    {
+                        lowest = Mathf.Min(lowest, _targetBones[j].position.y);
+                    }
+                }
+
+                if (lowest < float.MaxValue)
+                {
+                    hips.position += Vector3.up * (_groundY - lowest);
                 }
             }
         }
