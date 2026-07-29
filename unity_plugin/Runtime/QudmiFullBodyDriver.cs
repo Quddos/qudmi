@@ -41,6 +41,15 @@ namespace Qudmi
             "skewing velocity and temporal context even though nothing would crash.")]
         [SerializeField] private float targetSampleFps = 30f;
 
+        [Header("Placement")]
+        [Tooltip("Positions the rig so its head bone coincides with the tracked headset, instead " +
+            "of trusting the model's predicted root height. Strongly recommended: the headset " +
+            "position is measured, whereas the predicted root height carries model error and " +
+            "assumes the avatar's proportions match the training bodies -- either of which sinks " +
+            "the avatar into the floor or floats it above. Also what makes first-person view " +
+            "line up, since the camera then sits in the avatar's own head.")]
+        [SerializeField] private bool anchorHeadToTracker = true;
+
         [Header("Calibration")]
         [Tooltip("Seconds after tracking starts before calibration is fitted automatically. " +
             "Exists because the wearer cannot be standing in the calibration pose and clicking a " +
@@ -331,6 +340,19 @@ namespace Qudmi
                     bone.rotation = _globalRotations[j]
                         * Quaternion.Inverse(SmplStandingReference.Rotations[j])
                         * _restWorldRotations[j];
+                }
+            }
+
+            // Re-anchor only after the rotations are in, since they determine where the head bone
+            // actually ends up. Translating the root is rigid, so this moves the whole rig without
+            // disturbing the pose.
+            if (anchorHeadToTracker && headTransform != null)
+            {
+                Transform root = _boneTransforms[QudmiConstants.RootJoint];
+                Transform head = _boneTransforms[QudmiConstants.HeadJoint];
+                if (root != null && head != null)
+                {
+                    root.position += headTransform.position - head.position;
                 }
             }
         }

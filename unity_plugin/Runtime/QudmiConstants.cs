@@ -13,6 +13,8 @@ namespace Qudmi
         public const int NumTrackers = 3; // head, left wrist, right wrist (default config)
         public const int InputDim = NumTrackers * FeaturesPerTracker; // 36
         public const int OutputDim = NumBodyJoints * 6 + 3; // 22 * 6D rotation + root translation = 135
+        public const int RootJoint = 0;
+        public const int HeadJoint = 15;
 
         // Joint index layout, standard SMPL/SMPL+H order (docs/SPEC.md / smplh.py):
         // 0 pelvis(root), 1 L_hip, 2 R_hip, 3 spine1, 4 L_knee, 5 R_knee, 6 spine2, 7 L_ankle,
