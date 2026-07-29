@@ -63,6 +63,16 @@ def evaluate(model, loader, models, device):
 
         pred_pos = reconstruct_joint_positions(pred, betas, gender_code, models)
         target_pos = reconstruct_joint_positions(Y, betas, gender_code, models)
+
+        # Root-aligned, which is what MPJPE means in this literature -- DTP states it as "with
+        # the position and rotation of the root joint aligned", and AvatarPoser/AGRoL report the
+        # same way. Leaving the predicted root translation in measures global placement error
+        # instead, which is both a different quantity and one the Unity runtime discards in
+        # favour of the tracked head position, so including it would make our numbers look far
+        # worse than they are AND stop them being comparable to published work.
+        pred_pos = pred_pos - pred_pos[:, :1]
+        target_pos = target_pos - target_pos[:, :1]
+
         per_joint_error_mm = (pred_pos - target_pos).norm(dim=-1) * 1000.0  # meters -> mm
         total_mpjpe_mm += per_joint_error_mm.mean().item() * X.shape[0]
         n_samples += X.shape[0]

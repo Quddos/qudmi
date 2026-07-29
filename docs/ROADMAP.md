@@ -49,7 +49,20 @@ for project status, not the commit history.
       `unity_plugin/README.md` and `scripts/generate_unity_parity_fixture.py`.
       Not yet done: live Play-mode test with a real headset + rigged avatar (needs a physical
       XR device and a rigged character, separate from math/compile correctness) -- next item.
-- [ ] End-to-end demo: real Quest headset driving a full-body avatar in a Unity scene
+- [x] End-to-end demo: real Quest 3S (over Link) driving a Mixamo Humanoid avatar in Unity.
+      Getting there took four bugs that all produced plausible-but-wrong output rather than
+      errors, none of which unit tests could have caught: applying poses outside OnAnimatorIK,
+      retargeting from SMPL's rest pose rather than a standing one, mixing left- and
+      right-handed rotations in a single product, and treating a controller's pose as a wrist
+      joint's pose. Each was found by measuring live values against the training distribution.
+- [x] Trained on the official AMASS split with CMU/KIT/ACCAD/BMLmovi (589,761 windows),
+      FK-position loss, LR decay and early stopping. **Root-aligned MPJPE: 76mm val (HumanEva),
+      94mm test (TotalCapture)** -- for reference, published three-point work (AvatarPoser,
+      AGRoL) reports roughly 60-70mm, and six-sensor DTP reports 10mm. Previous run, before the
+      extra data, had roughly double the rotation error.
+- [ ] Reduce foot sliding / add sequence-level training (needed for DTP's foot-velocity loss,
+      which single-frame prediction can't express)
+- [ ] Publish weights to Hugging Face + short technical writeup
 - [ ] Public model weights + writeup published (Hugging Face + README)
 
 ## Later / v1+ ideas (not scoped yet)
