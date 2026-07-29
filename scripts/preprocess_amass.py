@@ -16,7 +16,13 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from qudmi.data.amass import assign_splits, discover_sequences, process_sequence, subject_id_for_path
+from qudmi.data.amass import (
+    assign_splits,
+    assign_splits_official,
+    discover_sequences,
+    process_sequence,
+    subject_id_for_path,
+)
 from qudmi.data.smplh import load_smplh_model
 
 
@@ -55,10 +61,21 @@ def main():
     print(f"Found {len(sequences)} sequence files under {args.amass_root}")
 
     subject_ids = [subject_id_for_path(p) for p in sequences]
-    split_map = assign_splits(subject_ids)
-    n_subjects = len(set(subject_ids))
-    split_subject_counts = {s: sum(1 for v in split_map.values() if v == s) for s in ("train", "val", "test")}
-    print(f"{n_subjects} distinct subjects -> {split_subject_counts} (by subject, not by window)")
+    official = assign_splits_official(sequences, args.amass_root)
+    if official is not None:
+        path_split_map = official
+        split_map = None
+        counts = {s: sum(1 for v in official.values() if v == s) for s in ("train", "val", "test")}
+        print(f"Using the official AMASS split by sub-dataset -> {counts} sequences "
+              "(numbers are comparable to published work)")
+    else:
+        path_split_map = None
+        split_map = assign_splits(subject_ids)
+        n_subjects = len(set(subject_ids))
+        counts = {s: sum(1 for v in split_map.values() if v == s) for s in ("train", "val", "test")}
+        print(f"Official AMASS split unavailable with the downloaded subsets (it needs at least "
+              f"one val and one test subset -- see OFFICIAL_SPLIT_BY_SUBSET). Falling back to a "
+              f"subject-level split: {n_subjects} distinct subjects -> {counts}")
 
     buckets = {"train": [], "val": [], "test": []}
     n_ok, n_skipped, n_failed = 0, 0, 0
@@ -79,7 +96,7 @@ def main():
             n_skipped += 1
             continue
 
-        split = split_map[sample.subject_id]
+        split = path_split_map[str(path)] if path_split_map is not None else split_map[sample.subject_id]
         buckets[split].append((sample.X.cpu(), sample.Y.cpu(), sample.betas.cpu(), sample.gender_code.cpu()))
         n_ok += 1
 

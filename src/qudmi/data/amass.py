@@ -196,6 +196,47 @@ def process_sequence(
     )
 
 
+# The split most sparse-tracker papers report against (DTP, AvatarPoser, AGRoL and others use
+# this or a close variant), by AMASS sub-dataset. Matching it is what makes our MPJPE directly
+# comparable to published numbers instead of only to itself -- see docs/VISION.md.
+OFFICIAL_SPLIT_BY_SUBSET = {
+    "CMU": "train", "MPI_Limits": "train", "Eyes_Japan_Dataset": "train", "KIT": "train",
+    "BMLrub": "train", "BMLmovi": "train", "BMLhandball": "train", "EKUT": "train",
+    "TCD_handMocap": "train", "ACCAD": "train", "DFaust_67": "train", "Transitions_mocap": "train",
+    "HumanEva": "val", "MPI_HDM05": "val", "SFU": "val", "MPI_mosh": "val",
+    "TotalCapture": "test",
+}
+
+
+def subset_name_for_path(npz_path: Path, amass_root: Path) -> str:
+    """Top-level AMASS sub-dataset folder (e.g. 'ACCAD') containing this sequence."""
+    try:
+        return npz_path.relative_to(amass_root).parts[0]
+    except ValueError:
+        return npz_path.parent.name
+
+
+def assign_splits_official(paths, amass_root: Path) -> dict[str, str] | None:
+    """Map each sequence to the standard AMASS split, or None if that isn't usable here.
+
+    Returns None when the downloaded subsets don't populate both val and test -- with only
+    ACCAD and BMLmovi present, for instance, every sequence is a training subset and the
+    evaluation splits come out empty, which is worse than a home-grown split. Callers fall back
+    to the subject-level split in that case rather than silently training with no validation.
+    """
+    mapping = {}
+    for path in paths:
+        subset = subset_name_for_path(Path(path), Path(amass_root))
+        split = OFFICIAL_SPLIT_BY_SUBSET.get(subset)
+        if split is None:
+            return None  # unknown subset: can't place it, don't guess
+        mapping[str(path)] = split
+
+    if not any(v == "val" for v in mapping.values()) or not any(v == "test" for v in mapping.values()):
+        return None
+    return mapping
+
+
 def assign_splits(subject_ids, val_frac: float = 0.1, test_frac: float = 0.1) -> dict[str, str]:
     """Deterministic train/val/test split across a full set of subjects.
 

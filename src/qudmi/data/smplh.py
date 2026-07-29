@@ -117,21 +117,22 @@ def forward_kinematics_from_rotmats(
     if J_rest.dim() == 2:
         J_rest = J_rest.unsqueeze(0).expand(N, -1, -1)  # broadcast shared betas across N
 
-    global_positions = torch.zeros(N, NUM_BODY_JOINTS, 3, device=local_rotmats.device)
-    global_rotmats = torch.zeros(N, NUM_BODY_JOINTS, 3, 3, device=local_rotmats.device)
-
-    global_positions[:, 0] = J_rest[:, 0]
-    global_rotmats[:, 0] = local_rotmats[:, 0]
+    # Accumulated into lists and stacked at the end rather than written in-place into
+    # preallocated tensors: in-place index assignment to a tensor that is then read again breaks
+    # autograd ("variable needed for gradient computation has been modified"), which this needs
+    # to survive now that the FK position loss backpropagates through it. parents[j] < j holds
+    # for the SMPL kinematic tree, so a parent is always already in the list.
+    rotations = [local_rotmats[:, 0]]
+    positions = [J_rest[:, 0]]
 
     for j in range(1, NUM_BODY_JOINTS):
         parent = model.parents[j]
         offset = J_rest[:, j] - J_rest[:, parent]  # (N, 3)
-        global_rotmats[:, j] = global_rotmats[:, parent] @ local_rotmats[:, j]
-        global_positions[:, j] = global_positions[:, parent] + torch.einsum(
-            "nij,nj->ni", global_rotmats[:, parent], offset
-        )
+        rotations.append(rotations[parent] @ local_rotmats[:, j])
+        positions.append(positions[parent] + torch.einsum("nij,nj->ni", rotations[parent], offset))
 
-    global_positions = global_positions + root_trans.unsqueeze(1)
+    global_rotmats = torch.stack(rotations, dim=1)
+    global_positions = torch.stack(positions, dim=1) + root_trans.unsqueeze(1)
 
     C = _ZUP_TO_YUP.to(device=local_rotmats.device, dtype=local_rotmats.dtype)
     global_positions = global_positions @ C.T
