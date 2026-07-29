@@ -50,6 +50,11 @@ namespace Qudmi
             "line up, since the camera then sits in the avatar's own head.")]
         [SerializeField] private bool anchorHeadToTracker = true;
 
+        [Tooltip("Shrinks the head bone to nothing so the wearer isn't looking at the inside of " +
+            "their own head. Only affects this rig, so a QudmiAvatarPreview clone still shows a " +
+            "complete body. Turn off for a third-person or spectator camera.")]
+        [SerializeField] private bool hideHeadInFirstPerson = true;
+
         [Header("Calibration")]
         [Tooltip("Seconds after tracking starts before calibration is fitted automatically. " +
             "Exists because the wearer cannot be standing in the calibration pose and clicking a " +
@@ -155,6 +160,14 @@ namespace Qudmi
                 Transform bone = _animator.GetBoneTransform(QudmiConstants.HumanBodyBoneForJoint[j]);
                 _boneTransforms[j] = bone;
                 _restWorldRotations[j] = bone != null ? bone.rotation : Quaternion.identity;
+            }
+
+            // Scale rather than disable: the head bone still has to drive its children's
+            // transforms, and hiding the renderer would take the whole body with it since the
+            // avatar is a single skinned mesh.
+            if (hideHeadInFirstPerson && _boneTransforms[QudmiConstants.HeadJoint] != null)
+            {
+                _boneTransforms[QudmiConstants.HeadJoint].localScale = Vector3.one * 0.0001f;
             }
         }
 

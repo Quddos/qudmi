@@ -27,25 +27,43 @@ Drop-in full-body avatar motion from a VR headset + two hand controllers. No ML 
    `Main Camera` left over from a new-scene template -- two GameObjects tagged `MainCamera` makes
    `Camera.main` ambiguous, and auto-detect may grab the wrong (untracked) one. Delete the
    leftover default camera.
-4. The Animator needs a **Controller assigned (not "None")**, with **IK Pass enabled on its base
-   layer** -- an empty Controller with no states/clips is fine, since this component fully drives
-   the pose every frame. This is required, not optional: `Animator.SetBoneLocalRotation` (what
-   this component uses to apply the pose) only works when called from Unity's `OnAnimatorIK`
-   callback, and Unity only invokes that callback when IK Pass is on. Skipping this doesn't fail
-   loudly -- the symptom is Console spam ("should only be done in OnAnimatorIK or OnStateIK")
-   escalating into NaN bone positions within a few seconds, found the hard way during an actual
-   headset test.
-5. Press Play.
+4. Leave the Animator's **Controller** empty (`None`). This component writes bone transforms
+   directly and does not need a Controller or an animation clip; anything the Controller plays
+   will simply fight it.
+5. Press Play, then **stand upright facing forward with your arms hanging down for ~5 seconds.**
+   Calibration fits itself automatically at that point (see below) and logs when it's done.
 
 That's the entire integration. No inference code, no per-joint wiring.
 
-### Creating the empty IK-pass Controller
+### Calibration -- why it matters
 
-1. In the Project window: right-click → Create → Animator Controller. Name it anything (e.g.
-   `QudmiIKPass`).
-2. Double-click it to open the Animator window. Select the **Base Layer** (left panel), click the
-   gear icon next to it, and check **IK Pass**.
-3. Assign this Controller to your character's Animator component. No states or clips needed.
+A tracker's pose is not the body joint's pose, and the difference is not small. Measured over
+10,187 standing frames of the training set, the orientation the model expects for each tracked
+joint sits 165 degrees (head), 112 (left wrist) and 87 (right wrist) away from what a Unity XR
+rig reports for the same physical pose. Feeding device rotations in unmodified gives a
+confidently wrong pose rather than a slightly noisy one, and no amount of retraining fixes it.
+DTP (Liu et al., *Virtual Reality* 28:116, sec 3.2) handles the same problem with a T-pose
+calibration step.
+
+The component ships with baked-in defaults so it works with no setup, and refits them to the
+specific wearer and controller convention on calibration. Calibration also scales the input to
+the wearer's height, since AMASS subjects top out near 1.65 m and a taller user would otherwise
+sit outside the distribution the model was trained on.
+
+By default this happens automatically 5 seconds after tracking starts (`Auto Calibrate Delay`).
+There is also a **Calibrate** button in the Inspector during Play, though standing in the
+calibration pose while reaching for a mouse is awkward -- the delay exists for that reason.
+
+### Seeing your own avatar
+
+The camera sits inside the avatar's head, so the wearer cannot see their own body from the
+outside -- which makes judging pose quality surprisingly hard. Add **Qudmi Avatar Preview** to a
+second copy of the character, placed a couple of metres in front and turned to face the play
+area, and it will mirror the driven pose in real time.
+
+The driven avatar's head bone is shrunk to nothing by default (`Hide Head In First Person`) so
+the wearer isn't looking at the inside of their own skull. That only affects the driven rig; the
+preview clone keeps a complete body.
 
 ## Why Unity's Inference Engine instead of raw ONNX Runtime
 
@@ -74,10 +92,21 @@ Unity -batchmode -nographics -runTests -testPlatform EditMode -projectPath <proj
 
 ## What's verified vs. not (as of this writing)
 
-- Verified: the package compiles cleanly against Unity 6000.4 + Inference Engine 2.2, and all
-  three parity tests (input encoding, per-joint local rotation decode, root recomposition) pass.
-- In progress: a live end-to-end run with a real Quest headset driving a real Mixamo Humanoid
-  avatar. A real bug (SetBoneLocalRotation called outside OnAnimatorIK, cascading into NaN bone
-  positions) was found and fixed via this testing, not caught by the parity tests -- those check
-  the math functions in isolation, not the MonoBehaviour's actual Unity lifecycle usage. Still to
-  confirm: the avatar visibly tracking head/hand movement correctly once IK Pass is enabled.
+- **Verified working on hardware**: a Quest 3S over Quest Link driving a Mixamo Humanoid avatar.
+  The avatar stands upright, is correctly placed on the ground, and follows head and hand
+  movement. Compiles against Unity 6000.3 / 6000.4 with Inference Engine 2.2-2.6, and the three
+  Python-parity tests pass.
+- **Not yet production quality**: pose accuracy is limited by the model, not the integration.
+  Arms and torso track recognizably; the legs are the weak point and always will be to some
+  degree -- with only three tracked points nothing observes them, so the lower body is a
+  plausible inference rather than a measurement. Published three-point work lands around 6-7cm
+  mean joint error against roughly 1cm for six-tracker systems.
+- **Not yet done**: standalone Android/Quest build (developed over Link), quantized on-device
+  variant, and support for optional extra trackers for users who own them.
+
+Getting to this point turned up four real bugs the unit tests could not have caught, all of
+which produced plausible-looking wrong output rather than errors: applying poses outside
+`OnAnimatorIK`, retargeting from SMPL's rest pose instead of a standing one, mixing left- and
+right-handed rotations in one product, and treating a controller's pose as a wrist joint's pose.
+Each was found by measuring live values against the training distribution -- worth knowing if you
+extend this.
