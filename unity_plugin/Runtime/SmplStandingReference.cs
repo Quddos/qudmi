@@ -51,10 +51,18 @@ namespace Qudmi
             FromColumns(new Vector3(-0.4433f, +0.4313f, -0.7858f), new Vector3(+0.7343f, -0.3281f, -0.5943f), new Vector3(-0.5142f, -0.8404f, -0.1713f)),  // 21 R_wrist
         };
 
-        /// <summary>Column convention matches Rotation6D.Decode: forward = column 2, up = column 1.</summary>
+        /// <summary>
+        /// Column convention matches Rotation6D.Decode: forward = column 2, up = column 1.
+        ///
+        /// The conjugation is required, not cosmetic. These values were measured in the Python
+        /// pipeline's right-handed space, but they are consumed in ApplyPose alongside
+        /// PoseDecoder's output, which has already been converted to Unity's left-handed space.
+        /// Leaving them unconverted mixes the two handednesses in a single product and flips the
+        /// avatar upside down -- legs up, head through the floor.
+        /// </summary>
         private static Quaternion FromColumns(Vector3 column0, Vector3 column1, Vector3 column2)
         {
-            return Quaternion.LookRotation(column2, column1);
+            return CoordinateConversion.ConjugateRotation(Quaternion.LookRotation(column2, column1));
         }
     }
 }
