@@ -41,6 +41,12 @@ namespace Qudmi
             "skewing velocity and temporal context even though nothing would crash.")]
         [SerializeField] private float targetSampleFps = 30f;
 
+        [Header("Calibration")]
+        [Tooltip("Seconds after tracking starts before calibration is fitted automatically. " +
+            "Exists because the wearer cannot be standing in the calibration pose and clicking a " +
+            "mouse button at the same time. Set to 0 to calibrate only manually.")]
+        [SerializeField] private float autoCalibrateDelay = 5f;
+
         [Header("Diagnostics")]
         [Tooltip("Logs the canonicalized model input once per second, so live values can be " +
             "compared against the training distribution. A mismatch here means the model is " +
@@ -57,6 +63,8 @@ namespace Qudmi
         private bool _loggedRawPoseDiagnostic;
         private bool _loggedAutoDetectWarning;
         private float _diagnosticTimer;
+        private bool _calibrated;
+        private float _trackingStartTime = -1f;
         private float _timeSinceLastSample;
         private PoseDecoder.DecodedPose _pendingPose;
         private Transform[] _boneTransforms;
@@ -116,6 +124,7 @@ namespace Qudmi
                 _buffer.PositionScale = TrackerCalibration.ReferenceHeadHeight / headHeight;
             }
 
+            _calibrated = true;
             Debug.Log($"QudmiFullBodyDriver: calibrated. Head height {headHeight:F2}m -> " +
                 $"position scale {_buffer.PositionScale:F3}, rotation offsets fitted to this rig.", this);
         }
@@ -185,6 +194,20 @@ namespace Qudmi
             if (!_buffer.IsFull)
             {
                 return; // still filling the initial window of history
+            }
+
+            if (!_calibrated && autoCalibrateDelay > 0f)
+            {
+                if (_trackingStartTime < 0f)
+                {
+                    _trackingStartTime = Time.time;
+                    Debug.Log($"QudmiFullBodyDriver: auto-calibrating in {autoCalibrateDelay:F0}s -- " +
+                        "stand upright, face forward, arms hanging down.", this);
+                }
+                else if (Time.time - _trackingStartTime >= autoCalibrateDelay)
+                {
+                    Calibrate();
+                }
             }
 
             float[] features = _buffer.ComputeFeatures();
