@@ -279,9 +279,11 @@ namespace Qudmi
         /// not an obvious crash.
         ///
         /// So: accumulate SMPL locals into global rotations G_j, then place each bone at
-        /// G_j * B_j, where B_j is that bone's captured bind-pose orientation. Left-multiplying by
-        /// G_j applies the model's rotation in world space, about the bone's own rest orientation.
-        /// With G_j = identity this reduces to the untouched bind pose, as it should.
+        /// G_j * inverse(S_j) * B_j, where B_j is that bone's captured bind-pose orientation and
+        /// S_j is SMPL's orientation for the same physical pose the rig is bound in (standing --
+        /// see SmplStandingReference). The inverse(S_j) term is what makes the two rest poses
+        /// comparable; without it the avatar ends up ~165 degrees over-rotated, i.e. lying down.
+        /// At the standing pose G_j equals S_j and the rig lands exactly on its bind pose.
         ///
         /// World rotations are assigned (rather than local ones) so that rigs with extra
         /// intermediate bones -- Mixamo's Spine/Spine1/Spine2 vs. SMPL's three spine joints --
@@ -323,7 +325,12 @@ namespace Qudmi
                 Transform bone = _boneTransforms[j];
                 if (bone != null)
                 {
-                    bone.rotation = _globalRotations[j] * _restWorldRotations[j];
+                    // Relative to SMPL's *standing* reference, not its identity rest pose -- see
+                    // SmplStandingReference for why those differ by ~165 degrees and why using
+                    // the latter laid the avatar on the floor.
+                    bone.rotation = _globalRotations[j]
+                        * Quaternion.Inverse(SmplStandingReference.Rotations[j])
+                        * _restWorldRotations[j];
                 }
             }
         }
