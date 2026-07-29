@@ -11,7 +11,16 @@ entirely or use hand-tuned inverse-kinematics that looks stiff. Qudmi learns tha
 motion-capture data instead of hand-coding it, and ships it as a small (~5–20M parameter) model
 any engine can run locally at real-time latency.
 
-> Status: early scaffold — architecture and training pipeline in progress. See
+> **Status: working end-to-end on hardware.** A Quest 3S drives a Mixamo Humanoid avatar in
+> Unity: standing, correctly grounded, tracking head and hands. Root-aligned MPJPE **76mm val /
+> 94mm test** on the official AMASS split — for reference, published three-point work reports
+> ~60-70mm. Full numbers and honest limitations in [docs/RESULTS.md](docs/RESULTS.md).
+>
+> ⚠️ **The trained weights are research-only.** AMASS's license prohibits training networks on it
+> for commercial use of any kind, so the weights cannot ship in a commercial product. The code is
+> MIT and freely reusable. See [docs/RESULTS.md#licensing-important](docs/RESULTS.md).
+>
+> See
 > [docs/ROADMAP.md](docs/ROADMAP.md) for what's done and what's next, and
 > [docs/VISION.md](docs/VISION.md) for the longer-term mission and why this aims to be more
 > than a single VR plugin.
