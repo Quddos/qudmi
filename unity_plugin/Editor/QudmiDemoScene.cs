@@ -20,6 +20,24 @@ namespace Qudmi.Editor
         [MenuItem("Window/Qudmi/Create Demo Scene")]
         public static void Create()
         {
+            if (QudmiModelInstaller.FindInstalledModel() == null)
+            {
+                // Building a scene whose driver has no model would look like a broken demo rather
+                // than a missing download, so ask first and bail if declined.
+                if (!EditorUtility.DisplayDialog("Qudmi",
+                        "The demo needs the model weights, which aren't in this project yet.\n\n" +
+                        "Download them now? (~19.6 MB, research/non-commercial licence)",
+                        "Download", "Cancel"))
+                {
+                    return;
+                }
+                QudmiModelInstaller.DownloadWithConsent();
+                if (QudmiModelInstaller.FindInstalledModel() == null)
+                {
+                    return;
+                }
+            }
+
             var root = new GameObject("Qudmi Demo");
             Undo.RegisterCreatedObjectUndo(root, "Create Qudmi demo scene");
 
@@ -46,7 +64,7 @@ namespace Qudmi.Editor
             SetPrivate(driver, "headTransform", head);
             SetPrivate(driver, "leftHandTransform", leftHand);
             SetPrivate(driver, "rightHandTransform", rightHand);
-            SetPrivate(driver, "modelAsset", FindModel());
+            SetPrivate(driver, "modelAsset", QudmiModelInstaller.FindInstalledModel());
             // The wearer isn't literally inside this avatar, so keep its head visible.
             SetPrivate(driver, "hideHeadInFirstPerson", false);
 
@@ -102,19 +120,6 @@ namespace Qudmi.Editor
             return go.transform;
         }
 
-        private static Object FindModel()
-        {
-            foreach (string guid in AssetDatabase.FindAssets("qudmi_v0"))
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.EndsWith(".onnx"))
-                {
-                    return AssetDatabase.LoadMainAssetAtPath(path);
-                }
-            }
-            Debug.LogWarning("Qudmi: bundled model not found; assign it manually on the driver.");
-            return null;
-        }
 
         /// <summary>
         /// Assigns a [SerializeField] private field. Used instead of widening those fields to

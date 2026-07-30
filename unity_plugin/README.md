@@ -11,11 +11,19 @@ URL**, and paste:
 https://github.com/Quddos/qudmi.git?path=/unity_plugin
 ```
 
-That pulls the code *and* the trained model, so it works immediately with nothing else to
-download. `com.unity.ai.inference` (Unity's inference package, formerly "Sentis" -- Sentis-era
-class names still work, under the `Unity.InferenceEngine` namespace) resolves automatically.
+`com.unity.ai.inference` (Unity's inference package, formerly "Sentis" -- Sentis-era class names
+still work, under the `Unity.InferenceEngine` namespace) resolves automatically.
 
-To pin a version, append a tag: `...?path=/unity_plugin#v0.1.0`.
+To pin a version, append a tag: `...?path=/unity_plugin#v0.2.0`.
+
+Then fetch the weights: **Window > Qudmi > Download Model Weights** (~19.6 MB, from
+[Hugging Face](https://huggingface.co/quddusr/qudmi)). The setup wizard and demo scene both offer
+to do this for you if it hasn't been done.
+
+> **Why aren't the weights bundled?** The package code is MIT. The weights are trained on AMASS,
+> whose licence forbids commercial use of anything trained on it. Shipping both under one MIT
+> package would misstate what's being distributed, and someone would reasonably ship it in a paid
+> game without ever knowing. Downloading them separately also means you see and accept those terms.
 
 > **Why not searchable in Package Manager?** Unity's built-in registry is curated by Unity; you
 > cannot publish to it directly. The searchable route for open-source packages is

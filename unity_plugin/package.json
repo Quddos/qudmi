@@ -1,8 +1,8 @@
 {
     "name": "com.qudmi.fullbody",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "displayName": "Qudmi Full Body",
-    "description": "Full-body avatar motion from a VR headset and two hand controllers, running on-device in real time. Add one component to a Humanoid-rigged avatar -- no ML code, no extra trackers, no per-joint wiring.\n\nNOTE: the bundled model weights are trained on AMASS and are licensed for non-commercial research use only. The package code is MIT.",
+    "description": "Full-body avatar motion from a VR headset and two hand controllers, running on-device in real time. Add one component to a Humanoid-rigged avatar -- no ML code, no extra trackers, no per-joint wiring. Includes a setup wizard and a demo scene that runs without VR hardware.\n\nThe package code is MIT. The trained weights are downloaded separately (Window > Qudmi > Download Model Weights) because they are trained on AMASS and licensed for non-commercial research use only -- they may not be shipped in a commercial product.",
     "unity": "6000.0",
     "license": "MIT",
     "author": {

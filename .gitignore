@@ -9,10 +9,10 @@ __pycache__/
 /data/
 /checkpoints/
 /runs/
+# Weights are distributed via Hugging Face / GitHub releases, deliberately NOT bundled in the
+# Unity package: the package is MIT, the AMASS-trained weights are non-commercial, and shipping
+# them together would misstate the package's licence. QudmiModelInstaller fetches them instead.
 *.onnx
-# ...except the shipped model: the package is useless without it, and a git-URL
-# install would otherwise silently do nothing.
-!unity_plugin/Runtime/Model/*.onnx
 *.pt
 *.pth
 

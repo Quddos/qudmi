@@ -1,0 +1,28 @@
+# OpenUPM package metadata, for submission to https://openupm.com/packages/add/
+#
+# Submit via the web form (it validates the topic list and opens the PR for you) or as a PR to
+# openupm/openupm adding this file at data/packages/com.qudmi.fullbody.yml
+#
+# Note on licensing: licenseSpdxId is MIT and that is accurate -- the package contains only MIT
+# code. The trained weights are NOT bundled; they are downloaded from Hugging Face at setup and
+# are non-commercial (AMASS-derived). That separation is deliberate: declaring MIT on a package
+# that shipped non-commercial weights would misstate what a user receives, and OpenUPM's audience
+# installs into commercial projects. The restriction is stated in the package description so it is
+# visible at the point of install rather than only in the README.
+
+name: com.qudmi.fullbody
+displayName: Qudmi Full Body
+description: >-
+  Full-body avatar motion from a VR headset and two hand controllers, on-device and in real time.
+  One component on a Humanoid-rigged avatar; no ML code, no extra trackers, no per-joint wiring.
+  Includes a setup wizard and a demo scene that runs without VR hardware. Package code is MIT;
+  the model weights are downloaded separately and are licensed for non-commercial research use
+  only.
+repoUrl: https://github.com/Quddos/qudmi
+licenseSpdxId: MIT
+licenseName: MIT License
+topics:
+  - xr
+  - animation
+gitTagPrefix: v
+hunter: Quddos

@@ -40,6 +40,7 @@ namespace Qudmi.Editor
             EditorGUILayout.Space();
 
             List<string> blockers = new List<string>();
+            DrawModelCheck(blockers);
             DrawAvatarChecks(blockers);
             DrawSceneChecks();
 
@@ -76,6 +77,26 @@ namespace Qudmi.Editor
             }
 
             EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawModelCheck(List<string> blockers)
+        {
+            if (QudmiModelInstaller.FindInstalledModel() != null)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                "The model weights aren't in this project yet. They're distributed separately from " +
+                "the package because they're licensed for non-commercial research use only, while " +
+                "the package code is MIT.",
+                MessageType.Warning);
+            if (GUILayout.Button("Download model weights (~19.6 MB)"))
+            {
+                QudmiModelInstaller.DownloadWithConsent();
+            }
+            blockers.Add("Model weights not installed.");
+            EditorGUILayout.Space();
         }
 
         private void DrawAvatarChecks(List<string> blockers)
@@ -161,7 +182,7 @@ namespace Qudmi.Editor
             SerializedProperty modelProp = so.FindProperty("modelAsset");
             if (modelProp != null && modelProp.objectReferenceValue == null)
             {
-                Object model = FindShippedModel();
+                Object model = QudmiModelInstaller.FindInstalledModel();
                 if (model != null)
                 {
                     modelProp.objectReferenceValue = model;
@@ -169,8 +190,8 @@ namespace Qudmi.Editor
                 }
                 else
                 {
-                    Debug.LogWarning("Qudmi: couldn't locate the bundled model asset; assign it " +
-                        "manually on the component.", driver);
+                    Debug.LogWarning("Qudmi: model weights not found. Use Window > Qudmi > " +
+                        "Download Model Weights, then assign it on the component.", driver);
                 }
             }
 
@@ -179,19 +200,6 @@ namespace Qudmi.Editor
             Debug.Log("Qudmi: avatar set up. Press Play and stand still, arms down, for ~5s to calibrate.", _avatar);
         }
 
-        /// <summary>Locates the .onnx that ships inside the package, wherever the Package Manager put it.</summary>
-        private static Object FindShippedModel()
-        {
-            foreach (string guid in AssetDatabase.FindAssets("qudmi_v0"))
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.EndsWith(".onnx"))
-                {
-                    return AssetDatabase.LoadMainAssetAtPath(path);
-                }
-            }
-            return null;
-        }
 
         private void AddPreviewClone()
         {
