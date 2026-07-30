@@ -23,7 +23,19 @@ To pin a version, append a tag: `...?path=/unity_plugin#v0.1.0`.
 > URL install above to be proven first. The Asset Store is not an option here: its content is
 > used commercially, and these weights are licensed for non-commercial research only.
 
-## Quick start
+## Try it in 30 seconds, no headset needed
+
+**Window > Qudmi > Create Demo Scene**, then press Play.
+
+You get a ground plane, a generated Humanoid avatar, and simulated head/hand motion driving it —
+so you can see what the model actually does before setting up an XR rig or even owning a headset.
+Useful for evaluating output too: the simulated motion repeats exactly, which live tracking can't.
+
+The avatar is deliberately a set of primitives. A package can't redistribute a real character
+(Mixamo rigs are Adobe's, Unity's sample rigs are Unity's), so **Window > Qudmi > Create Demo
+Avatar** generates one instead — ugly, but unambiguously ours to ship.
+
+## Quick start with your own avatar
 
 **Window > Qudmi > Setup Wizard** does the whole setup and checks for the things that commonly go
 wrong silently — a leftover `Main Camera` making `Camera.main` ambiguous, an Animator Controller
