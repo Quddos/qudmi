@@ -1,3 +1,5 @@
+![Qudmi](docs/cover.png)
+
 # Qudmi
 
 **Qudmi** is an open, lightweight imitation-learning model that turns sparse VR/XR/AR tracker

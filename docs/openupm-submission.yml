@@ -24,5 +24,6 @@ licenseName: MIT License
 topics:
   - xr
   - animation
+image: https://raw.githubusercontent.com/Quddos/qudmi/main/docs/cover.png
 gitTagPrefix: v
 hunter: Quddos
